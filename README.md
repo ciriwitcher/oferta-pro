@@ -51,7 +51,7 @@ VITE_SUPABASE_ANON_KEY
 ```
 
 Repozytorium zawiera `netlify.toml`. Build uruchamia `npm run build`, a statyczne pliki są
-publikowane z `.output/public`. Adapter Netlify tworzy funkcję obsługującą SSR i routing aplikacji.
+publikowane z `dist`. Adapter Netlify tworzy funkcję obsługującą SSR i routing aplikacji.
 
 Po każdym merge do gałęzi `main` Netlify automatycznie zbuduje i opublikuje nową wersję.
 

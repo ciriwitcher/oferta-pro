@@ -42,7 +42,11 @@ const benefits = [
 
 const steps = [
   { n: "1", title: "Opisz klienta", text: "Podaj branżę, problem i usługę, którą proponujesz." },
-  { n: "2", title: "Wybierz ton", text: "Formalny, partnerski lub sprzedażowy — zależnie od odbiorcy." },
+  {
+    n: "2",
+    title: "Wybierz ton",
+    text: "Formalny, partnerski lub sprzedażowy — zależnie od odbiorcy.",
+  },
   { n: "3", title: "Wyślij ofertę", text: "Przejrzyj gotowy dokument i oznacz go jako wysłany." },
 ];
 
@@ -51,7 +55,10 @@ function Landing() {
     <div className="min-h-dvh bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 sm:px-6">
-          <Link to="/" className="min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link
+            to="/"
+            className="min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <Logo />
           </Link>
           <nav aria-label="Nawigacja główna" className="flex items-center gap-1 sm:gap-2">
