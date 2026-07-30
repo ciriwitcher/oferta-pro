@@ -1,10 +1,14 @@
-import { useSyncExternalStore } from "react";
-import { offersStore } from "@/data/offers";
+import { useQuery } from "@tanstack/react-query";
+import { fetchOffers } from "@/data/offers";
+import { useAuth } from "@/lib/auth-context";
 
 export function useOffers() {
-  return useSyncExternalStore(
-    offersStore.subscribe,
-    offersStore.getSnapshot,
-    offersStore.getServerSnapshot,
-  );
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["offers", user?.id],
+    queryFn: fetchOffers,
+    enabled: Boolean(user),
+    staleTime: 15_000,
+  });
 }
