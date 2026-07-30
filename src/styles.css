@@ -19,6 +19,12 @@
  */
 
 @theme inline {
+  --font-sans:
+    "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display:
+    "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: 0 1px 2px oklch(0.2 0.03 220 / 0.04), 0 8px 24px -12px oklch(0.2 0.03 220 / 0.12);
+  --shadow-soft: 0 1px 2px oklch(0.2 0.03 220 / 0.05);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -26,6 +32,7 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
