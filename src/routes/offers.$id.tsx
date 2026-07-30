@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/app-layout";
