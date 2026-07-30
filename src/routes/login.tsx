@@ -1,10 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/app-layout";
+import { useAuth } from "@/lib/auth-context";
+import { supabaseConfigError } from "@/lib/supabase";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -20,10 +23,18 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { signIn, user, loading } = useAuth();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!loading && user) navigate({ to: "/dashboard", replace: true });
+  }, [loading, navigate, user]);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setFormError("");
     const data = new FormData(e.currentTarget);
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
@@ -32,9 +43,27 @@ function LoginPage() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Podaj poprawny adres e-mail.";
     if (!password) next.password = "Podaj hasło.";
     setErrors(next);
-    if (Object.keys(next).length) return;
-    toast.success("Zalogowano do konta demonstracyjnego.");
-    navigate({ to: "/dashboard" });
+    if (Object.keys(next).length || supabaseConfigError) return;
+
+    setSubmitting(true);
+    try {
+      await signIn(email, password);
+      toast.success("Zalogowano.");
+      navigate({ to: "/dashboard", replace: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      setFormError(
+        message.includes("invalid login credentials") || message.includes("email not confirmed")
+          ? message.includes("email not confirmed")
+            ? "Najpierw potwierdź adres e-mail, korzystając z wiadomości od Supabase."
+            : "Nieprawidłowy e-mail lub hasło."
+          : error instanceof Error
+            ? error.message
+            : "Nie udało się zalogować.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -49,8 +78,21 @@ function LoginPage() {
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-8">
           <h1 className="text-2xl font-bold">Zaloguj się</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Wersja demonstracyjna — dane nie są nigdzie wysyłane.
+            Uzyskaj dostęp do własnych zapytań, wycen i ofert.
           </p>
+
+          {supabaseConfigError && (
+            <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {supabaseConfigError}
+            </p>
+          )}
+
+          {formError && (
+            <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {formError}
+            </p>
+          )}
+
           <form onSubmit={onSubmit} noValidate className="mt-6 space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">Adres e-mail</Label>
@@ -85,8 +127,9 @@ function LoginPage() {
                 </p>
               )}
             </div>
-            <Button type="submit" className="w-full">
-              Zaloguj się
+            <Button type="submit" className="w-full" disabled={submitting || Boolean(supabaseConfigError)}>
+              {submitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {submitting ? "Logowanie…" : "Zaloguj się"}
             </Button>
           </form>
         </div>
