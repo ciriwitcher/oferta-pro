@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const styles: Record<OfferStatus, string> = {
   szkic: "border-border bg-secondary text-secondary-foreground",
   gotowa: "border-primary/30 bg-accent text-accent-foreground",
-  wyslana: "border-emerald-600/25 bg-emerald-50 text-emerald-800",
+  wyslana: "border-success-border bg-success text-success-foreground",
 };
 
 export function StatusBadge({ status }: { status: OfferStatus }) {
