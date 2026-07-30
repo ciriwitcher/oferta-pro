@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/app-layout";
+import { assertSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -21,8 +22,9 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     const email = String(data.get("email") ?? "").trim();
@@ -33,8 +35,18 @@ function LoginPage() {
     if (!password) next.password = "Podaj hasło.";
     setErrors(next);
     if (Object.keys(next).length) return;
-    toast.success("Zalogowano do konta demonstracyjnego.");
-    navigate({ to: "/dashboard" });
+    setIsSubmitting(true);
+    try {
+      assertSupabaseConfigured();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      toast.success("Zalogowano.");
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nie udało się zalogować.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -49,7 +61,7 @@ function LoginPage() {
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-8">
           <h1 className="text-2xl font-bold">Zaloguj się</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Wersja demonstracyjna — dane nie są nigdzie wysyłane.
+            Zaloguj się, aby przejść do swoich ofert.
           </p>
           <form onSubmit={onSubmit} noValidate className="mt-6 space-y-5">
             <div className="space-y-2">
@@ -85,8 +97,8 @@ function LoginPage() {
                 </p>
               )}
             </div>
-            <Button type="submit" className="w-full">
-              Zaloguj się
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Logowanie…" : "Zaloguj się"}
             </Button>
           </form>
         </div>

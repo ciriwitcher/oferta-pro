@@ -11,7 +11,13 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatPrice, type Offer } from "@/data/offers";
 
-export function OffersList({ offers, actionLabel = "Zobacz" }: { offers: Offer[]; actionLabel?: string }) {
+export function OffersList({
+  offers,
+  actionLabel = "Zobacz",
+}: {
+  offers: Offer[];
+  actionLabel?: string;
+}) {
   if (offers.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
