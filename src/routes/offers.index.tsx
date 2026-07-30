@@ -46,14 +46,14 @@ function OffersHistory() {
 
   return (
     <AppLayout>
-      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold sm:text-3xl">Historia ofert</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Wszystkie zapisane oferty wraz z ich statusem.
           </p>
         </div>
-        <Button asChild className="shrink-0">
+        <Button asChild className="w-full shrink-0 sm:w-auto">
           <Link to="/offers/new">
             <PlusCircle className="size-4" aria-hidden="true" />
             Nowa oferta
