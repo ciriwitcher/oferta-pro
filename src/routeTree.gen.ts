@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OffersRouteImport } from './routes/offers'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as OffersIndexRouteImport } from './routes/offers.index'
 import { Route as OffersIdRouteImport } from './routes/offers.$id'
 import { Route as OffersNewRouteImport } from './routes/offers.new'
@@ -43,6 +44,11 @@ const RegisterRoute = RegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OffersIndexRoute = OffersIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/offers': typeof OffersRouteWithChildren
   '/register': typeof RegisterRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/offers/$id': typeof OffersIdRoute
   '/offers/new': typeof OffersNewRoute
   '/offers/': typeof OffersIndexRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/offers/$id': typeof OffersIdRoute
   '/offers/new': typeof OffersNewRoute
   '/offers': typeof OffersIndexRoute
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/offers': typeof OffersRouteWithChildren
   '/register': typeof RegisterRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/offers/$id': typeof OffersIdRoute
   '/offers/new': typeof OffersNewRoute
   '/offers/': typeof OffersIndexRoute
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/offers'
     | '/register'
+    | '/auth/callback'
     | '/offers/$id'
     | '/offers/new'
     | '/offers/'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/register'
+    | '/auth/callback'
     | '/offers/$id'
     | '/offers/new'
     | '/offers'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/offers'
     | '/register'
+    | '/auth/callback'
     | '/offers/$id'
     | '/offers/new'
     | '/offers/'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OffersRoute: typeof OffersRouteWithChildren
   RegisterRoute: typeof RegisterRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -164,6 +177,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/offers/': {
@@ -211,7 +231,18 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OffersRoute: OffersRouteWithChildren,
   RegisterRoute: RegisterRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

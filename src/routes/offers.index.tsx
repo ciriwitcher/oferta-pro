@@ -24,13 +24,16 @@ export const Route = createFileRoute("/offers/")({
 
 const filters: { value: OfferStatus | "wszystkie"; label: string }[] = [
   { value: "wszystkie", label: "Wszystkie" },
-  { value: "szkic", label: "Szkic" },
-  { value: "gotowa", label: "Gotowa" },
-  { value: "wyslana", label: "Wysłana" },
+  { value: "draft", label: "Szkic" },
+  { value: "ready", label: "Gotowa" },
+  { value: "sent", label: "Wysłana" },
+  { value: "accepted", label: "Zaakceptowana" },
+  { value: "rejected", label: "Odrzucona" },
+  { value: "archived", label: "Zarchiwizowana" },
 ];
 
 function OffersHistory() {
-  const offers = useOffers();
+  const { data: offers = [], isLoading, error } = useOffers();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<OfferStatus | "wszystkie">("wszystkie");
 
@@ -106,7 +109,20 @@ function OffersHistory() {
       </p>
 
       <div className="mt-4">
-        <OffersList offers={filtered} actionLabel="Zobacz ofertę" />
+        {isLoading ? (
+          <p className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
+            Ładowanie ofert…
+          </p>
+        ) : error ? (
+          <p
+            role="alert"
+            className="rounded-xl border border-destructive/30 bg-card p-8 text-sm text-destructive"
+          >
+            Nie udało się pobrać ofert: {error.message}
+          </p>
+        ) : (
+          <OffersList offers={filtered} actionLabel="Zobacz ofertę" />
+        )}
       </div>
     </AppLayout>
   );

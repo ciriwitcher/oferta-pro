@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/app-layout";
+import { assertSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -27,14 +28,24 @@ function Field({
   hint,
   error,
   ...props
-}: React.ComponentProps<typeof Input> & { id: string; label: string; hint?: string; error?: string }) {
+}: React.ComponentProps<typeof Input> & {
+  id: string;
+  label: string;
+  hint?: string;
+  error?: string;
+}) {
   const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null]
     .filter(Boolean)
     .join(" ");
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} aria-invalid={!!error} aria-describedby={describedBy || undefined} {...props} />
+      <Input
+        id={id}
+        aria-invalid={!!error}
+        aria-describedby={describedBy || undefined}
+        {...props}
+      />
       {hint && (
         <p id={`${id}-hint`} className="text-xs text-muted-foreground">
           {hint}
@@ -52,24 +63,49 @@ function Field({
 function RegisterPage() {
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const name = String(data.get("name") ?? "").trim();
+    const fullName = String(data.get("full_name") ?? "").trim();
+    const companyName = String(data.get("company_name") ?? "").trim();
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
     const confirm = String(data.get("confirm") ?? "");
     const next: Record<string, string> = {};
-    if (!name) next.name = "Podaj imię lub nazwę firmy.";
+    if (!fullName) next.full_name = "Podaj imię i nazwisko.";
     if (!email) next.email = "Podaj adres e-mail.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Podaj poprawny adres e-mail.";
     if (password.length < 8) next.password = "Hasło musi mieć co najmniej 8 znaków.";
     if (confirm !== password) next.confirm = "Hasła muszą być takie same.";
     setErrors(next);
     if (Object.keys(next).length) return;
-    toast.success("Konto demonstracyjne zostało utworzone.");
-    navigate({ to: "/dashboard" });
+    setIsSubmitting(true);
+    try {
+      assertSupabaseConfigured();
+      const { data: result, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName, company_name: companyName || null },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      if (result.session) {
+        toast.success("Konto zostało utworzone.");
+        navigate({ to: "/dashboard" });
+      } else {
+        setConfirmationSent(true);
+        toast.success("Sprawdź pocztę i potwierdź adres e-mail.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nie udało się utworzyć konta.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -84,16 +120,32 @@ function RegisterPage() {
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-8">
           <h1 className="text-2xl font-bold">Utwórz konto</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Wersja demonstracyjna — dane pozostają w Twojej przeglądarce.
+            Dane będą bezpiecznie zapisane na Twoim koncie.
           </p>
+          {confirmationSent && (
+            <div
+              role="status"
+              className="mt-5 rounded-lg border border-primary/30 bg-accent p-4 text-sm"
+            >
+              Konto zostało utworzone. Sprawdź skrzynkę pocztową i kliknij link potwierdzający, a
+              następnie zaloguj się.
+            </div>
+          )}
           <form onSubmit={onSubmit} noValidate className="mt-6 space-y-5">
             <Field
-              id="name"
-              name="name"
-              label="Imię lub nazwa firmy"
-              placeholder="Studio Nova"
+              id="full_name"
+              name="full_name"
+              label="Imię i nazwisko"
+              placeholder="Jan Kowalski"
+              autoComplete="name"
+              error={errors.full_name}
+            />
+            <Field
+              id="company_name"
+              name="company_name"
+              label="Nazwa firmy (opcjonalnie)"
+              placeholder="Twoja firma"
               autoComplete="organization"
-              error={errors.name}
             />
             <Field
               id="email"
@@ -121,8 +173,8 @@ function RegisterPage() {
               autoComplete="new-password"
               error={errors.confirm}
             />
-            <Button type="submit" className="w-full">
-              Utwórz konto
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Tworzenie konta…" : "Utwórz konto"}
             </Button>
           </form>
         </div>

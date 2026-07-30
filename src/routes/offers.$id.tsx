@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Check, Pencil } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
-import { useOffers } from "@/hooks/use-offers";
-import { formatDate, formatPrice, offersStore, providerName, toneLabels } from "@/data/offers";
+import { useOffers, useProfile, useSetOfferStatus } from "@/hooks/use-offers";
+import { formatDate, formatPrice, isOfferComplete, toneLabels } from "@/data/offers";
 
 export const Route = createFileRoute("/offers/$id")({
   head: () => ({
@@ -46,16 +46,35 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function OfferDetail() {
   const { id } = Route.useParams();
-  const offers = useOffers();
+  const { data: offers = [], isLoading, error } = useOffers();
+  const { data: profile } = useProfile();
+  const setStatus = useSetOfferStatus();
   const navigate = useNavigate();
   const offer = offers.find((o) => o.id === id);
 
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <p className="text-sm text-muted-foreground">Ładowanie oferty…</p>
+      </AppLayout>
+    );
+  }
+  if (error) {
+    return (
+      <AppLayout>
+        <p role="alert" className="text-sm text-destructive">
+          {error.message}
+        </p>
+      </AppLayout>
+    );
+  }
   if (!offer) return <OfferNotFound />;
+  const providerName = profile?.company_name || profile?.full_name || "Twoja firma";
 
   const validUntil = new Date(offer.createdAt);
   validUntil.setDate(validUntil.getDate() + 30);
 
-  const scopeItems = offer.scope
+  const scopeItems = (offer.scope ?? "")
     .split(/[,;\n]/)
     .map((s) => s.trim())
     .filter(Boolean);
@@ -70,22 +89,28 @@ function OfferDetail() {
           </Link>
         </Button>
         <div className="flex flex-wrap justify-end gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/offers/new">
-              <Pencil className="size-4" aria-hidden="true" />
-              Edytuj
-            </Link>
-          </Button>
           <Button
             size="sm"
-            disabled={offer.status === "wyslana"}
-            onClick={() => {
-              offersStore.setStatus(offer.id, "wyslana");
-              toast.success("Oferta została oznaczona jako wysłana.");
+            disabled={offer.status === "sent" || setStatus.isPending}
+            onClick={async () => {
+              if (!isOfferComplete(offer)) {
+                toast.error("Uzupełnij zakres, cenę, czas realizacji i ton przed wysłaniem.");
+                return;
+              }
+              try {
+                await setStatus.mutateAsync({ id: offer.id, status: "sent" });
+                toast.success("Oferta została oznaczona jako wysłana.");
+              } catch (statusError) {
+                toast.error(
+                  statusError instanceof Error
+                    ? statusError.message
+                    : "Nie udało się zmienić statusu.",
+                );
+              }
             }}
           >
             <Check className="size-4" aria-hidden="true" />
-            {offer.status === "wyslana" ? "Już wysłana" : "Oznacz jako wysłaną"}
+            {offer.status === "sent" ? "Już wysłana" : "Oznacz jako wysłaną"}
           </Button>
         </div>
       </div>
@@ -128,24 +153,26 @@ function OfferDetail() {
               Dziękujemy za rozmowę i zaufanie. Poniżej przedstawiamy propozycję współpracy
               przygotowaną dla firmy {offer.client}. Dokument opisuje nasze rozumienie sytuacji,
               proponowane rozwiązanie, zakres prac oraz warunki realizacji. Ton oferty:{" "}
-              {toneLabels[offer.tone].toLowerCase()}.
+              {offer.tone ? toneLabels[offer.tone].toLowerCase() : "nie wybrano"}.
             </p>
           </Section>
 
           <Section title="Zrozumienie problemu">
             <p>{offer.problem}</p>
             <p className="mt-2">
-              Na podstawie naszych doświadczeń w branży {offer.industry.toLowerCase()} widzimy, że
-              takie sytuacje najczęściej wynikają z braku jednego uporządkowanego procesu. Naszym
-              celem jest usunięcie tej przeszkody w sposób możliwie prosty dla Państwa zespołu.
+              Na podstawie naszych doświadczeń w branży{" "}
+              {(offer.industry || "klienta").toLowerCase()} widzimy, że takie sytuacje najczęściej
+              wynikają z braku jednego uporządkowanego procesu. Naszym celem jest usunięcie tej
+              przeszkody w sposób możliwie prosty dla Państwa zespołu.
             </p>
           </Section>
 
           <Section title="Proponowane rozwiązanie">
             <p>
-              Proponujemy realizację usługi: <strong className="text-foreground">{offer.service}</strong>. Rozwiązanie
-              projektujemy tak, aby odpowiadało bezpośrednio na opisany problem i było gotowe do
-              samodzielnego utrzymania po zakończeniu prac.
+              Proponujemy realizację usługi:{" "}
+              <strong className="text-foreground">{offer.service}</strong>. Rozwiązanie projektujemy
+              tak, aby odpowiadało bezpośrednio na opisany problem i było gotowe do samodzielnego
+              utrzymania po zakończeniu prac.
             </p>
           </Section>
 
@@ -160,9 +187,10 @@ function OfferDetail() {
 
           <Section title="Harmonogram">
             <p>
-              Przewidywany czas realizacji: <strong className="text-foreground">{offer.deadline}</strong> od momentu
-              akceptacji oferty. Prace dzielimy na trzy etapy: analiza i ustalenia, realizacja oraz
-              przekazanie wraz z krótkim szkoleniem.
+              Przewidywany czas realizacji:{" "}
+              <strong className="text-foreground">{offer.deliveryTime || "do ustalenia"}</strong> od
+              momentu akceptacji oferty. Prace dzielimy na trzy etapy: analiza i ustalenia,
+              realizacja oraz przekazanie wraz z krótkim szkoleniem.
             </p>
           </Section>
 
@@ -176,9 +204,9 @@ function OfferDetail() {
 
           <Section title="Warunki współpracy">
             <p>
-              Oferta jest ważna do {formatDate(validUntil.toISOString())}. Wszelkie prace wykraczające
-              poza opisany zakres wyceniamy osobno przed rozpoczęciem. Przekazujemy pełne prawa do
-              wykonanych materiałów po uregulowaniu płatności.
+              Oferta jest ważna do {formatDate(validUntil.toISOString())}. Wszelkie prace
+              wykraczające poza opisany zakres wyceniamy osobno przed rozpoczęciem. Przekazujemy
+              pełne prawa do wykonanych materiałów po uregulowaniu płatności.
             </p>
           </Section>
 
@@ -194,7 +222,7 @@ function OfferDetail() {
         <Separator className="my-8" />
 
         <footer className="text-sm text-muted-foreground">
-          <p>{providerName} · kontakt@studionova.pl · +48 600 100 200</p>
+          <p>{providerName}</p>
         </footer>
       </article>
 

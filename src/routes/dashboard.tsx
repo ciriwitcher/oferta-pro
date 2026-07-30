@@ -3,7 +3,7 @@ import { FileText, PlusCircle, Send } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { OffersList } from "@/components/offers-list";
 import { Button } from "@/components/ui/button";
-import { useOffers } from "@/hooks/use-offers";
+import { useOffers, useProfile } from "@/hooks/use-offers";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -18,18 +18,21 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function Dashboard() {
-  const offers = useOffers();
+  const { data: offers = [], isLoading, error } = useOffers();
+  const { data: profile } = useProfile();
   const stats = [
     { label: "Wszystkie oferty", value: offers.length, icon: FileText },
-    { label: "Szkice", value: offers.filter((o) => o.status === "szkic").length, icon: PlusCircle },
-    { label: "Wysłane", value: offers.filter((o) => o.status === "wyslana").length, icon: Send },
+    { label: "Szkice", value: offers.filter((o) => o.status === "draft").length, icon: PlusCircle },
+    { label: "Wysłane", value: offers.filter((o) => o.status === "sent").length, icon: Send },
   ];
 
   return (
     <AppLayout>
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold sm:text-3xl">Witaj ponownie, Studio Nova</h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">
+            Witaj ponownie, {profile?.company_name || profile?.full_name || "użytkowniku"}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Sprawdź status ofert i przygotuj kolejną propozycję dla klienta.
           </p>
@@ -70,7 +73,20 @@ function Dashboard() {
             <Link to="/offers">Zobacz wszystkie</Link>
           </Button>
         </div>
-        <OffersList offers={offers.slice(0, 5)} />
+        {isLoading ? (
+          <p className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
+            Ładowanie ofert…
+          </p>
+        ) : error ? (
+          <p
+            role="alert"
+            className="rounded-xl border border-destructive/30 bg-card p-8 text-sm text-destructive"
+          >
+            Nie udało się pobrać ofert: {error.message}
+          </p>
+        ) : (
+          <OffersList offers={offers.slice(0, 5)} />
+        )}
       </section>
     </AppLayout>
   );

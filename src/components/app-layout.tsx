@@ -1,10 +1,13 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { FileText, LayoutDashboard, LogOut, Menu, PlusCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/components/auth-provider";
+import { supabase } from "@/lib/supabase";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -26,11 +29,13 @@ export function Logo({ className }: { className?: string }) {
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   return (
     <nav aria-label="Nawigacja główna" className="flex flex-col gap-1">
       {navItems.map((item) => {
-        const active = pathname === item.to || (item.to === "/offers" && /^\/offers\/\d/.test(pathname));
+        const active =
+          pathname === item.to || (item.to === "/offers" && pathname.startsWith("/offers/"));
         return (
           <Link
             key={item.to}
@@ -54,8 +59,15 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         type="button"
         onClick={() => {
           onNavigate?.();
-          toast.success("Wylogowano z konta demonstracyjnego.");
-          navigate({ to: "/" });
+          void supabase.auth.signOut().then(({ error }) => {
+            if (error) {
+              toast.error(error.message);
+              return;
+            }
+            queryClient.clear();
+            toast.success("Wylogowano.");
+            navigate({ to: "/login" });
+          });
         }}
         className="mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
@@ -68,6 +80,20 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && !user) navigate({ to: "/login", replace: true });
+  }, [isLoading, navigate, user]);
+
+  if (isLoading || !user) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background">
+        <p className="text-sm text-muted-foreground">Sprawdzanie sesji…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh bg-background">
