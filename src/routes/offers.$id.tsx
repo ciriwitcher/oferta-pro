@@ -1,39 +1,34 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Check, Pencil } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Check, Loader2, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
 import { useOffers } from "@/hooks/use-offers";
-import { formatDate, formatPrice, offersStore, providerName, toneLabels } from "@/data/offers";
+import {
+  deleteOfferByLead,
+  formatDate,
+  formatPrice,
+  toneLabels,
+  updateOfferStatus,
+  type OfferStatus,
+} from "@/data/offers";
+import { getUserDisplayName, useAuth } from "@/lib/auth-context";
+import { useState } from "react";
 
 export const Route = createFileRoute("/offers/$id")({
   head: () => ({
     meta: [
       { title: "Podgląd oferty — AI Oferta" },
-      { name: "description", content: "Profesjonalny podgląd wygenerowanej oferty dla klienta." },
+      { name: "description", content: "Podgląd zapisanej oferty dla klienta." },
       { property: "og:title", content: "Podgląd oferty — AI Oferta" },
-      { property: "og:description", content: "Pełna treść oferty gotowa do wysyłki." },
+      { property: "og:description", content: "Zakres, wycena i status oferty w jednym miejscu." },
     ],
   }),
   component: OfferDetail,
-  notFoundComponent: OfferNotFound,
 });
-
-function OfferNotFound() {
-  return (
-    <AppLayout>
-      <h1 className="text-2xl font-bold">Nie znaleziono oferty</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Oferta mogła zostać usunięta lub adres jest nieprawidłowy.
-      </p>
-      <Button asChild className="mt-6">
-        <Link to="/offers">Wróć do historii</Link>
-      </Button>
-    </AppLayout>
-  );
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -46,46 +41,142 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function OfferDetail() {
   const { id } = Route.useParams();
-  const offers = useOffers();
   const navigate = useNavigate();
-  const offer = offers.find((o) => o.id === id);
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { data: offers = [], isLoading, error } = useOffers();
+  const [workingAction, setWorkingAction] = useState<string | null>(null);
+  const offer = offers.find((item) => item.id === id);
 
-  if (!offer) return <OfferNotFound />;
+  async function changeStatus(status: OfferStatus) {
+    if (!offer) return;
+    setWorkingAction(status);
+    try {
+      await updateOfferStatus(offer.id, status);
+      await queryClient.invalidateQueries({ queryKey: ["offers"] });
+      toast.success(`Status zmieniono na: ${status === "sent" ? "Wysłana" : status === "accepted" ? "Zaakceptowana" : "Odrzucona"}.`);
+    } catch (changeError) {
+      toast.error(changeError instanceof Error ? changeError.message : "Nie udało się zmienić statusu.");
+    } finally {
+      setWorkingAction(null);
+    }
+  }
+
+  async function removeOffer() {
+    if (!offer) return;
+    const confirmed = window.confirm(
+      `Usunąć ofertę dla klienta „${offer.client}”? Tej operacji nie można cofnąć.`,
+    );
+    if (!confirmed) return;
+
+    setWorkingAction("delete");
+    try {
+      await deleteOfferByLead(offer.leadId);
+      await queryClient.invalidateQueries({ queryKey: ["offers"] });
+      toast.success("Oferta została usunięta.");
+      navigate({ to: "/offers" });
+    } catch (deleteError) {
+      toast.error(deleteError instanceof Error ? deleteError.message : "Nie udało się usunąć oferty.");
+    } finally {
+      setWorkingAction(null);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center gap-3 rounded-xl border border-border bg-card p-10 text-sm text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          Pobieranie oferty…
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout>
+        <h1 className="text-2xl font-bold">Nie udało się pobrać oferty</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {error instanceof Error ? error.message : "Sprawdź połączenie z Supabase."}
+        </p>
+        <Button asChild className="mt-6">
+          <Link to="/offers">Wróć do historii</Link>
+        </Button>
+      </AppLayout>
+    );
+  }
+
+  if (!offer) {
+    return (
+      <AppLayout>
+        <h1 className="text-2xl font-bold">Nie znaleziono oferty</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Oferta nie istnieje albo nie należy do zalogowanego użytkownika.
+        </p>
+        <Button asChild className="mt-6">
+          <Link to="/offers">Wróć do historii</Link>
+        </Button>
+      </AppLayout>
+    );
+  }
 
   const validUntil = new Date(offer.createdAt);
   validUntil.setDate(validUntil.getDate() + 30);
-
+  const providerName = getUserDisplayName(user);
   const scopeItems = offer.scope
     .split(/[,;\n]/)
-    .map((s) => s.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
+  const disabled = workingAction !== null;
 
   return (
     <AppLayout>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
-        <Button asChild variant="ghost" size="sm" className="-ml-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
           <Link to="/offers">
             <ArrowLeft className="size-4" aria-hidden="true" />
             Wróć do historii
           </Link>
         </Button>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/offers/new">
-              <Pencil className="size-4" aria-hidden="true" />
-              Edytuj
-            </Link>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={disabled || offer.status === "sent"}
+            onClick={() => changeStatus("sent")}
+          >
+            {workingAction === "sent" ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Check className="size-4" aria-hidden="true" />
+            )}
+            {offer.status === "sent" ? "Oznaczona jako wysłana" : "Oznacz jako wysłaną"}
           </Button>
           <Button
             size="sm"
-            disabled={offer.status === "wyslana"}
-            onClick={() => {
-              offersStore.setStatus(offer.id, "wyslana");
-              toast.success("Oferta została oznaczona jako wysłana.");
-            }}
+            variant="outline"
+            disabled={disabled || offer.status === "accepted"}
+            onClick={() => changeStatus("accepted")}
           >
-            <Check className="size-4" aria-hidden="true" />
-            {offer.status === "wyslana" ? "Już wysłana" : "Oznacz jako wysłaną"}
+            <ThumbsUp className="size-4" aria-hidden="true" />
+            Zaakceptowana
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled || offer.status === "rejected"}
+            onClick={() => changeStatus("rejected")}
+          >
+            <ThumbsDown className="size-4" aria-hidden="true" />
+            Odrzucona
+          </Button>
+          <Button size="sm" variant="destructive" disabled={disabled} onClick={removeOffer}>
+            {workingAction === "delete" ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Trash2 className="size-4" aria-hidden="true" />
+            )}
+            Usuń
           </Button>
         </div>
       </div>
@@ -108,10 +199,11 @@ function OfferDetail() {
           <div>
             <dt className="text-muted-foreground">Klient</dt>
             <dd className="mt-1 font-medium">{offer.client}</dd>
-            <dd className="text-muted-foreground">{offer.industry}</dd>
+            {offer.industry && <dd className="text-muted-foreground">{offer.industry}</dd>}
+            {offer.clientEmail && <dd className="text-muted-foreground">{offer.clientEmail}</dd>}
           </div>
           <div>
-            <dt className="text-muted-foreground">Data wystawienia</dt>
+            <dt className="text-muted-foreground">Data utworzenia</dt>
             <dd className="mt-1 font-medium">{formatDate(offer.createdAt)}</dd>
           </div>
           <div>
@@ -125,68 +217,53 @@ function OfferDetail() {
         <div className="space-y-7">
           <Section title="Wprowadzenie">
             <p>
-              Dziękujemy za rozmowę i zaufanie. Poniżej przedstawiamy propozycję współpracy
-              przygotowaną dla firmy {offer.client}. Dokument opisuje nasze rozumienie sytuacji,
-              proponowane rozwiązanie, zakres prac oraz warunki realizacji. Ton oferty:{" "}
-              {toneLabels[offer.tone].toLowerCase()}.
+              Poniżej przedstawiam propozycję współpracy przygotowaną dla {offer.client}. Dokument
+              porządkuje problem, proponowaną usługę, zakres, termin i wycenę.
+              {offer.tone ? ` Wybrany ton: ${toneLabels[offer.tone].toLowerCase()}.` : ""}
             </p>
           </Section>
 
           <Section title="Zrozumienie problemu">
             <p>{offer.problem}</p>
-            <p className="mt-2">
-              Na podstawie naszych doświadczeń w branży {offer.industry.toLowerCase()} widzimy, że
-              takie sytuacje najczęściej wynikają z braku jednego uporządkowanego procesu. Naszym
-              celem jest usunięcie tej przeszkody w sposób możliwie prosty dla Państwa zespołu.
-            </p>
           </Section>
 
           <Section title="Proponowane rozwiązanie">
             <p>
-              Proponujemy realizację usługi: <strong className="text-foreground">{offer.service}</strong>. Rozwiązanie
-              projektujemy tak, aby odpowiadało bezpośrednio na opisany problem i było gotowe do
-              samodzielnego utrzymania po zakończeniu prac.
+              Proponowana usługa: <strong className="text-foreground">{offer.service}</strong>.
             </p>
           </Section>
 
           <Section title="Zakres prac">
-            <ul className="ml-5 list-disc space-y-1">
-              {scopeItems.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
+            {scopeItems.length ? (
+              <ul className="ml-5 list-disc space-y-1">
+                {scopeItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>Zakres nie został jeszcze uzupełniony.</p>
+            )}
             {offer.notes && <p className="mt-3">Dodatkowe ustalenia: {offer.notes}</p>}
           </Section>
 
           <Section title="Harmonogram">
             <p>
-              Przewidywany czas realizacji: <strong className="text-foreground">{offer.deadline}</strong> od momentu
-              akceptacji oferty. Prace dzielimy na trzy etapy: analiza i ustalenia, realizacja oraz
-              przekazanie wraz z krótkim szkoleniem.
+              {offer.deliveryTime
+                ? `Przewidywany czas realizacji: ${offer.deliveryTime}.`
+                : "Termin realizacji nie został jeszcze ustalony."}
             </p>
           </Section>
 
           <Section title="Cena">
-            <p className="text-2xl font-bold text-foreground">{formatPrice(offer.price)} netto</p>
-            <p className="mt-2">
-              Wynagrodzenie obejmuje pełny zakres prac opisany powyżej. Płatność w dwóch transzach:
-              50% na start i 50% po odbiorze.
-            </p>
-          </Section>
-
-          <Section title="Warunki współpracy">
-            <p>
-              Oferta jest ważna do {formatDate(validUntil.toISOString())}. Wszelkie prace wykraczające
-              poza opisany zakres wyceniamy osobno przed rozpoczęciem. Przekazujemy pełne prawa do
-              wykonanych materiałów po uregulowaniu płatności.
-            </p>
+            <p className="text-2xl font-bold text-foreground">{formatPrice(offer.price)}</p>
+            {offer.price != null && <p className="mt-2">Cena obejmuje zakres opisany w tej ofercie.</p>}
           </Section>
 
           <Section title="Kolejne kroki">
             <ol className="ml-5 list-decimal space-y-1">
-              <li>Akceptacja oferty i ustalenie terminu startu.</li>
-              <li>Spotkanie wprowadzające oraz przekazanie materiałów.</li>
-              <li>Rozpoczęcie prac zgodnie z harmonogramem.</li>
+              <li>Zweryfikuj zakres, cenę i termin.</li>
+              <li>Przekaż ofertę klientowi wybranym kanałem.</li>
+              <li>Zmień status w aplikacji po wysłaniu oraz po decyzji klienta.</li>
             </ol>
           </Section>
         </div>
@@ -194,15 +271,9 @@ function OfferDetail() {
         <Separator className="my-8" />
 
         <footer className="text-sm text-muted-foreground">
-          <p>{providerName} · kontakt@studionova.pl · +48 600 100 200</p>
+          <p>{providerName}{user?.email ? ` · ${user.email}` : ""}</p>
         </footer>
       </article>
-
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Button variant="outline" onClick={() => navigate({ to: "/offers" })}>
-          Wróć do historii
-        </Button>
-      </div>
     </AppLayout>
   );
 }
