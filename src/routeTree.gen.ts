@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as OffersIndexRouteImport } from './routes/offers.index'
+import { Route as OffersNewRouteImport } from './routes/offers.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,12 +41,18 @@ const OffersIndexRoute = OffersIndexRouteImport.update({
   path: '/offers/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OffersNewRoute = OffersNewRouteImport.update({
+  id: '/offers/new',
+  path: '/offers/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/offers/new': typeof OffersNewRoute
   '/offers/': typeof OffersIndexRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/offers/new': typeof OffersNewRoute
   '/offers': typeof OffersIndexRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,23 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/offers/new': typeof OffersNewRoute
   '/offers/': typeof OffersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/login' | '/register' | '/offers/'
+  fullPaths:
+    '/' | '/dashboard' | '/login' | '/register' | '/offers/new' | '/offers/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/login' | '/register' | '/offers'
-  id: '__root__' | '/' | '/dashboard' | '/login' | '/register' | '/offers/'
+  to: '/' | '/dashboard' | '/login' | '/register' | '/offers/new' | '/offers'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/register'
+    | '/offers/new'
+    | '/offers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +93,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  OffersNewRoute: typeof OffersNewRoute
   OffersIndexRoute: typeof OffersIndexRoute
 }
 
@@ -116,6 +134,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OffersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offers/new': {
+      id: '/offers/new'
+      path: '/offers/new'
+      fullPath: '/offers/new'
+      preLoaderRoute: typeof OffersNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -124,6 +149,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  OffersNewRoute: OffersNewRoute,
   OffersIndexRoute: OffersIndexRoute,
 }
 export const routeTree = rootRouteImport
