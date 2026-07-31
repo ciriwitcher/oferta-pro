@@ -1,7 +1,16 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileText, LayoutDashboard, Loader2, LogOut, Menu, PlusCircle, Sparkles } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  FileText,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  Menu,
+  PlusCircle,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -12,6 +21,7 @@ const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/offers/new", label: "Nowa oferta", icon: PlusCircle },
   { to: "/offers", label: "Historia ofert", icon: FileText },
+  { to: "/provider", label: "Dane wykonawcy", icon: BriefcaseBusiness },
 ] as const;
 
 export function Logo({ className }: { className?: string }) {
