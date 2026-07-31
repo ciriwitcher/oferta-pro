@@ -49,6 +49,8 @@ type ProviderRow = {
   updated_at: string | null;
 };
 
+let cachedProviderProfile: ProviderProfile | null = null;
+
 function mapProvider(row: ProviderRow): ProviderProfile {
   return {
     id: row.id,
@@ -78,6 +80,10 @@ async function authenticatedUser() {
   return { client, user };
 }
 
+export function getCachedProviderProfile() {
+  return cachedProviderProfile;
+}
+
 export async function fetchProviderProfile(): Promise<ProviderProfile> {
   const { client, user } = await authenticatedUser();
   const { data, error } = await client
@@ -89,7 +95,8 @@ export async function fetchProviderProfile(): Promise<ProviderProfile> {
     .single();
 
   if (error) throw error;
-  return mapProvider(data as ProviderRow);
+  cachedProviderProfile = mapProvider(data as ProviderRow);
+  return cachedProviderProfile;
 }
 
 export async function saveProviderProfile(input: ProviderProfileInput): Promise<ProviderProfile> {
@@ -122,7 +129,8 @@ export async function saveProviderProfile(input: ProviderProfileInput): Promise<
       : { full_name: input.fullName, company_name: "" };
   await client.auth.updateUser({ data: metadata });
 
-  return mapProvider(data as ProviderRow);
+  cachedProviderProfile = mapProvider(data as ProviderRow);
+  return cachedProviderProfile;
 }
 
 export async function uploadProviderLogo(file: File) {
@@ -167,6 +175,28 @@ export function toProviderDocumentData(
   const fallbackEmail = user?.email ?? "";
   return {
     name: getProviderDisplayName(profile, user),
+    contactName:
+      profile?.providerType === "company" && profile.fullName ? profile.fullName : undefined,
+    email: profile?.contactEmail || fallbackEmail || undefined,
+    phone: profile?.phone || undefined,
+    website: profile?.website || undefined,
+    taxId: profile?.providerType === "company" ? profile.taxId || undefined : undefined,
+    address: profile?.providerType === "company" ? profile.address || undefined : undefined,
+    bankAccount: profile?.providerType === "company" ? profile.bankAccount || undefined : undefined,
+    logoUrl: profile?.logoUrl || undefined,
+  };
+}
+
+export function toProviderDocumentDataWithFallback(
+  profile: ProviderProfile | null | undefined,
+  fallbackName: string,
+  fallbackEmail?: string,
+): ProviderDocumentData {
+  return {
+    name:
+      profile?.providerType === "company" && profile.companyName
+        ? profile.companyName
+        : profile?.fullName || fallbackName,
     contactName:
       profile?.providerType === "company" && profile.fullName ? profile.fullName : undefined,
     email: profile?.contactEmail || fallbackEmail || undefined,
