@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, FileText, Loader2, PlusCircle, Send } from "lucide-react";
+import { CheckCircle2, CircleDollarSign, FileText, Loader2, PlusCircle, Send } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { OffersList } from "@/components/offers-list";
 import { Button } from "@/components/ui/button";
+import { formatPrice } from "@/data/offers";
 import { useOffers } from "@/hooks/use-offers";
 import { getUserDisplayName, useAuth } from "@/lib/auth-context";
 
@@ -21,26 +22,46 @@ export const Route = createFileRoute("/dashboard")({
 function Dashboard() {
   const { user } = useAuth();
   const { data: offers = [], isLoading, error, refetch } = useOffers();
+  const acceptedValue = offers
+    .filter((offer) => offer.status === "accepted")
+    .reduce((sum, offer) => sum + (offer.price ?? 0), 0);
   const stats = [
-    { label: "Wszystkie oferty", value: offers.length, icon: FileText },
-    { label: "Szkice", value: offers.filter((offer) => offer.status === "draft").length, icon: PlusCircle },
-    { label: "Gotowe", value: offers.filter((offer) => offer.status === "ready").length, icon: CheckCircle2 },
-    { label: "Wysłane", value: offers.filter((offer) => offer.status === "sent").length, icon: Send },
+    {
+      label: "Szkice do dokończenia",
+      value: offers.filter((offer) => offer.status === "draft").length,
+      icon: PlusCircle,
+    },
+    {
+      label: "Gotowe do wysłania",
+      value: offers.filter((offer) => offer.status === "ready").length,
+      icon: CheckCircle2,
+    },
+    {
+      label: "Czekają na decyzję",
+      value: offers.filter((offer) => offer.status === "sent").length,
+      icon: Send,
+    },
+    {
+      label: "Wartość zaakceptowanych",
+      value: formatPrice(acceptedValue),
+      icon: CircleDollarSign,
+    },
   ];
 
   return (
     <AppLayout>
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold sm:text-3xl">Witaj, {getUserDisplayName(user)}</h1>
+          <p className="text-sm font-medium text-primary">Panel ofertowania</p>
+          <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Witaj, {getUserDisplayName(user)}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Dodaj zapytanie klienta, przygotuj wycenę i kontroluj status oferty.
+            Zapisuj zapytania klientów, kończ szkice i kontroluj oferty oczekujące na decyzję.
           </p>
         </div>
         <Button asChild className="w-full shrink-0 sm:w-auto">
           <Link to="/offers/new">
             <PlusCircle className="size-4" aria-hidden="true" />
-            Utwórz nową ofertę
+            Dodaj zapytanie i ofertę
           </Link>
         </Button>
       </header>
@@ -67,10 +88,10 @@ function Dashboard() {
           </span>
           <h2 className="mt-5 text-xl font-semibold">Nie masz jeszcze ofert</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
-            Zacznij od prawdziwego zapytania klienta. Zapiszesz problem, zakres, cenę i termin w jednym miejscu.
+            Zacznij od wklejenia prawdziwego zapytania klienta. Cenę i pełny zakres możesz uzupełnić później.
           </p>
           <Button asChild className="mt-6">
-            <Link to="/offers/new">Utwórz pierwszą ofertę</Link>
+            <Link to="/offers/new">Dodaj pierwsze zapytanie</Link>
           </Button>
         </section>
       ) : (
@@ -88,7 +109,7 @@ function Dashboard() {
                     </span>
                     <span className="text-sm text-muted-foreground">{stat.label}</span>
                   </div>
-                  <p className="mt-3 text-3xl font-bold tabular-nums">{stat.value}</p>
+                  <p className="mt-3 text-2xl font-bold tabular-nums sm:text-3xl">{stat.value}</p>
                 </li>
               ))}
             </ul>

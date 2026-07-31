@@ -115,8 +115,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const displayName = getUserDisplayName(user);
 
   return (
-    <div className="min-h-dvh bg-background">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-border bg-sidebar p-4 lg:flex">
+    <div className="min-h-dvh bg-background print:min-h-0 print:bg-white">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-border bg-sidebar p-4 print:hidden lg:flex">
         <Link
           to="/dashboard"
           className="mb-6 rounded-md px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -130,8 +130,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur lg:hidden">
+      <div className="print:pl-0 lg:pl-64">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur print:hidden lg:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon" aria-label="Otwórz menu nawigacji">
@@ -153,7 +153,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Logo className="text-sm" />
         </header>
 
-        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <main className="mx-auto w-full max-w-6xl px-4 py-8 print:max-w-none print:p-0 sm:px-6 lg:px-8 lg:py-10">
           {children}
         </main>
       </div>

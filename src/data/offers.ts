@@ -129,15 +129,21 @@ export async function fetchOffers(): Promise<Offer[]> {
     .filter((offer): offer is Offer => offer !== null);
 }
 
-export async function createOffer(input: NewOfferInput, status: "draft" | "ready") {
+async function getAuthenticatedUser() {
   const client = getSupabase();
   const {
     data: { user },
-    error: userError,
+    error,
   } = await client.auth.getUser();
 
-  if (userError) throw userError;
+  if (error) throw error;
   if (!user) throw new Error("Sesja wygasła. Zaloguj się ponownie.");
+
+  return { client, user };
+}
+
+export async function createOffer(input: NewOfferInput, status: "draft" | "ready") {
+  const { client, user } = await getAuthenticatedUser();
 
   const { data: lead, error: leadError } = await client
     .from("leads")
@@ -147,7 +153,7 @@ export async function createOffer(input: NewOfferInput, status: "draft" | "ready
       client_email: input.clientEmail || null,
       industry: input.industry || null,
       client_problem: input.problem,
-      proposed_service: input.service,
+      proposed_service: input.service || "Do ustalenia",
       status: "active",
     })
     .select("*")
@@ -164,7 +170,7 @@ export async function createOffer(input: NewOfferInput, status: "draft" | "ready
       price: input.price,
       delivery_time: input.deliveryTime || null,
       additional_information: input.notes || null,
-      tone: input.tone,
+      tone: input.tone ?? "partner",
       status,
     })
     .select("*")
@@ -174,6 +180,50 @@ export async function createOffer(input: NewOfferInput, status: "draft" | "ready
     await client.from("leads").delete().eq("id", lead.id);
     throw offerError;
   }
+
+  return mapOffer(offer as OfferRow, lead as LeadRow);
+}
+
+export async function updateOffer(
+  offerId: string,
+  leadId: string,
+  input: NewOfferInput,
+  status: "draft" | "ready",
+) {
+  const { client, user } = await getAuthenticatedUser();
+
+  const { data: lead, error: leadError } = await client
+    .from("leads")
+    .update({
+      client_name: input.client,
+      client_email: input.clientEmail || null,
+      industry: input.industry || null,
+      client_problem: input.problem,
+      proposed_service: input.service || "Do ustalenia",
+    })
+    .eq("id", leadId)
+    .eq("user_id", user.id)
+    .select("*")
+    .single();
+
+  if (leadError) throw leadError;
+
+  const { data: offer, error: offerError } = await client
+    .from("offers")
+    .update({
+      scope: input.scope || null,
+      price: input.price,
+      delivery_time: input.deliveryTime || null,
+      additional_information: input.notes || null,
+      tone: input.tone ?? "partner",
+      status,
+    })
+    .eq("id", offerId)
+    .eq("user_id", user.id)
+    .select("*")
+    .single();
+
+  if (offerError) throw offerError;
 
   return mapOffer(offer as OfferRow, lead as LeadRow);
 }
