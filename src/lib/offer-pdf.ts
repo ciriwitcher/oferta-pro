@@ -1,6 +1,6 @@
 import type { Offer } from "@/data/offers";
 import type { ProviderDocumentData } from "@/data/provider";
-import { downloadOfferPdf as generateOfferPdf } from "@/lib/offer-pdf-generator";
+import { downloadOfferPdf as generateOfferPdf } from "@/lib/offer-pdf-generator-v2";
 
 type PdfInput = {
   offer: Offer;
@@ -44,9 +44,7 @@ export async function downloadOfferPdf(input: PdfInput) {
   const originalAnchorClick = HTMLAnchorElement.prototype.click;
 
   URL.createObjectURL = ((object: Blob | MediaSource) => {
-    if (object instanceof Blob && object.type === "application/pdf") {
-      capturedBlob = object;
-    }
+    if (object instanceof Blob && object.type === "application/pdf") capturedBlob = object;
     return originalCreateObjectUrl.call(URL, object);
   }) as typeof URL.createObjectURL;
 
