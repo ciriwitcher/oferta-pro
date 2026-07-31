@@ -31,10 +31,12 @@ function NewOffer() {
       const created = await createOffer(values, status);
       await queryClient.invalidateQueries({ queryKey: ["offers"] });
       toast.success(status === "draft" ? "Szkic został zapisany." : "Oferta została utworzona.");
-      navigate({
-        to: status === "draft" ? "/offers" : "/offers/$id",
-        params: status === "draft" ? undefined : { id: created.id },
-      });
+
+      if (status === "draft") {
+        navigate({ to: "/offers" });
+      } else {
+        navigate({ to: "/offers/$id", params: { id: created.id } });
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Nie udało się zapisać oferty.");
     } finally {
