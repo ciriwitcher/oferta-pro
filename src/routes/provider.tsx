@@ -1,15 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import {
-  Building2,
-  FileText,
-  Loader2,
-  Save,
-  Trash2,
-  Upload,
-  UserRound,
-} from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Building2, Loader2, Save, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
@@ -17,12 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  deleteProviderLogo,
   getProviderDisplayName,
   providerContactLines,
   saveProviderProfile,
   toProviderDocumentData,
-  uploadProviderLogo,
   type ProviderProfileInput,
   type ProviderType,
 } from "@/data/provider";
@@ -53,7 +43,6 @@ const emptyForm: ProviderProfileInput = {
   taxId: "",
   address: "",
   bankAccount: "",
-  logoUrl: "",
 };
 
 function ProviderTypeCard({
@@ -104,8 +93,6 @@ function ProviderSettings() {
   const { data: profile, isLoading, error } = useProviderProfile();
   const [form, setForm] = useState<ProviderProfileInput>(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [removeLogo, setRemoveLogo] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -119,40 +106,11 @@ function ProviderSettings() {
       taxId: profile.taxId,
       address: profile.address,
       bankAccount: profile.bankAccount,
-      logoUrl: profile.logoUrl,
     });
   }, [profile, user?.email]);
 
-  const selectedLogoPreview = useMemo(
-    () => (logoFile ? URL.createObjectURL(logoFile) : ""),
-    [logoFile],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (selectedLogoPreview) URL.revokeObjectURL(selectedLogoPreview);
-    };
-  }, [selectedLogoPreview]);
-
   function update<K extends keyof ProviderProfileInput>(key: K, value: ProviderProfileInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
-  }
-
-  function handleLogoChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Wybierz plik graficzny.");
-      event.target.value = "";
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Logo może mieć maksymalnie 2 MB.");
-      event.target.value = "";
-      return;
-    }
-    setLogoFile(file);
-    setRemoveLogo(false);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -175,10 +133,6 @@ function ProviderSettings() {
 
     setSaving(true);
     try {
-      let logoUrl = removeLogo ? "" : form.logoUrl;
-      if (removeLogo && form.logoUrl) await deleteProviderLogo();
-      if (logoFile) logoUrl = await uploadProviderLogo(logoFile);
-
       const saved = await saveProviderProfile({
         ...form,
         fullName,
@@ -189,12 +143,9 @@ function ProviderSettings() {
         taxId: form.taxId.trim(),
         address: form.address.trim(),
         bankAccount: form.bankAccount.trim(),
-        logoUrl,
       });
 
       queryClient.setQueryData(["provider-profile"], saved);
-      setLogoFile(null);
-      setRemoveLogo(false);
       toast.success("Dane wykonawcy zostały zapisane.");
     } catch (saveError) {
       toast.error(
@@ -232,7 +183,6 @@ function ProviderSettings() {
   const previewProfile = profile ? { ...profile, ...form } : null;
   const documentData = toProviderDocumentData(previewProfile, user);
   const contactLines = providerContactLines(documentData);
-  const logoPreview = removeLogo ? "" : selectedLogoPreview || form.logoUrl;
 
   return (
     <AppLayout>
@@ -383,49 +333,6 @@ function ProviderSettings() {
             </section>
           )}
 
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-soft sm:p-6">
-            <h2 className="text-lg font-semibold">Logo — opcjonalnie</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              PNG, JPG lub WEBP, maksymalnie 2 MB. Logo pojawi się w nagłówku PDF.
-            </p>
-            <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-2xl border border-dashed border-border bg-secondary/40">
-                {logoPreview ? (
-                  <img src={logoPreview} alt="Podgląd logo" className="h-full w-full object-contain p-2" />
-                ) : (
-                  <FileText className="size-8 text-muted-foreground" aria-hidden="true" />
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" asChild>
-                  <label className="cursor-pointer">
-                    <Upload className="size-4" aria-hidden="true" />
-                    Wybierz logo
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="sr-only"
-                      onChange={handleLogoChange}
-                    />
-                  </label>
-                </Button>
-                {logoPreview && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setLogoFile(null);
-                      setRemoveLogo(true);
-                    }}
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                    Usuń logo
-                  </Button>
-                )}
-              </div>
-            </div>
-          </section>
-
           <div className="sticky bottom-3 z-20 rounded-2xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur">
             <Button type="submit" className="w-full sm:w-auto" disabled={saving}>
               {saving ? (
@@ -440,18 +347,13 @@ function ProviderSettings() {
 
         <aside className="h-fit rounded-2xl border border-border bg-card p-6 shadow-card xl:sticky xl:top-24">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Podgląd w ofercie</p>
-          <div className="mt-5 flex items-start gap-4">
-            {logoPreview && (
-              <img src={logoPreview} alt="Logo wykonawcy" className="size-14 rounded-xl object-contain" />
-            )}
-            <div className="min-w-0">
-              <p className="break-words text-lg font-bold">{getProviderDisplayName(previewProfile, user)}</p>
-              {contactLines.map((line) => (
-                <p key={line} className="mt-1 break-words text-sm leading-relaxed text-muted-foreground">
-                  {line}
-                </p>
-              ))}
-            </div>
+          <div className="mt-5 min-w-0">
+            <p className="break-words text-lg font-bold">{getProviderDisplayName(previewProfile, user)}</p>
+            {contactLines.map((line) => (
+              <p key={line} className="mt-1 break-words text-sm leading-relaxed text-muted-foreground">
+                {line}
+              </p>
+            ))}
           </div>
           <div className="mt-6 rounded-xl bg-secondary/50 p-4 text-xs leading-relaxed text-muted-foreground">
             Dane klienta nadal wpisujesz osobno przy każdej ofercie. Ten formularz dotyczy wyłącznie Ciebie jako wykonawcy.
