@@ -1,116 +1,125 @@
-# Oferta Pro
+# AI Oferta / Oferta Pro
 
-Zbuduj responsywną aplikację webową o nazwie „AI Oferta” w języku polskim.
+Funkcjonalne MVP aplikacji dla freelancerów i małych firm. Użytkownik może utworzyć własne konto, zapisać zapytanie klienta, przygotować wycenę i zakres oferty oraz śledzić status sprzedaży.
 
-Cel produktu: aplikacja ma pomagać freelancerom i małym firmom generować profesjonalne oferty dla klientów. Na tym etapie zbuduj wyłącznie dopracowany frontend MVP. Nie integruj AI, Supabase, bazy danych, płatności ani zewnętrznych API. Dane mają być przykładowe i przechowywane lokalnie/mockowane.
+## Co działa
 
-Technologia i styl:
-- TypeScript, React, Tailwind CSS oraz shadcn/ui.
-- Nowoczesny, prosty, profesjonalny interfejs SaaS.
-- Jasne tło, czytelna typografia, dużo przestrzeni, subtelne obramowania i delikatne cienie.
-- Jeden spójny kolor akcentowy, bez przesadnych gradientów.
-- Pełna responsywność: desktop, tablet i telefon.
-- Wszystkie teksty interfejsu po polsku.
-- Zadbaj o dostępność, poprawne etykiety formularzy, stany focus i sensowną hierarchię nagłówków.
+- rejestracja i logowanie przez Supabase Auth,
+- trwała sesja po odświeżeniu strony,
+- odseparowane dane każdego użytkownika przez Row Level Security,
+- zapisywanie szkiców i gotowych ofert,
+- dashboard liczony z prawdziwych danych,
+- historia, wyszukiwarka i filtry statusów,
+- podgląd oferty,
+- statusy: szkic, gotowa, wysłana, zaakceptowana, odrzucona i archiwalna,
+- usuwanie własnych ofert.
 
-Utwórz routing i następujące strony:
+Na tym etapie aplikacja nie generuje treści przez AI, nie wysyła e-maili i nie obsługuje płatności. Obecne MVP porządkuje proces ofertowania i przygotowuje fundament pod kolejne integracje.
 
-1. Landing page „/”
-- Logo/nazwa „AI Oferta”.
-- Prosty navbar z linkami: Funkcje, Jak to działa, Zaloguj się.
-- Hero z nagłówkiem wyjaśniającym wartość produktu, krótkim opisem i głównym CTA „Wypróbuj”.
-- CTA prowadzi do rejestracji.
-- Sekcja z 3 korzyściami: oszczędność czasu, profesjonalny wygląd, uporządkowana historia ofert.
-- Prosta sekcja „Jak to działa” w 3 krokach.
-- Końcowe CTA.
-- Bez niepotrzebnych sekcji marketingowych.
+## Przepływ użytkownika
 
-2. Logowanie „/login” i rejestracja „/register”
-- Formularze w estetycznej karcie.
-- Logowanie: e-mail, hasło, przycisk „Zaloguj się”.
-- Rejestracja: imię lub nazwa firmy, e-mail, hasło, powtórzenie hasła, przycisk „Utwórz konto”.
-- Linki między logowaniem i rejestracją.
-- To tylko frontend: po zatwierdzeniu formularza przekieruj użytkownika do dashboardu.
+1. Użytkownik tworzy konto i loguje się.
+2. Dodaje zapytanie klienta: klient, e-mail, problem i proponowana usługa.
+3. Uzupełnia zakres, cenę, termin realizacji i ton oferty.
+4. Zapisuje niekompletny szkic albo tworzy gotową ofertę.
+5. Przegląda ofertę i oznacza ją jako wysłaną.
+6. Po decyzji klienta oznacza ją jako zaakceptowaną albo odrzuconą.
 
-3. Dashboard „/dashboard”
-- Responsywny layout aplikacji z bocznym menu na desktopie i mobilną nawigacją.
-- Nawigacja: Dashboard, Nowa oferta, Historia ofert, Wyloguj.
-- Nagłówek powitalny.
-- Główny przycisk „Utwórz nową ofertę”.
-- Małe kafelki statystyk: wszystkie oferty, szkice, wysłane.
-- Lista ostatnich ofert jako tabela na desktopie i karty na telefonie.
-- Kolumny/dane: klient, usługa, cena, status, data, akcja „Zobacz”.
-- Użyj 4–5 realistycznych przykładowych ofert.
+## Konfiguracja Supabase
 
-4. Formularz tworzenia oferty „/offers/new”
-- Czytelny, wielosekcyjny formularz, ale bez kreatora wieloetapowego.
-- Pola:
-  * nazwa klienta,
-  * branża klienta,
-  * problem klienta,
-  * proponowana usługa,
-  * zakres prac,
-  * cena,
-  * termin realizacji,
-  * dodatkowe informacje,
-  * ton oferty: formalny, partnerski lub sprzedażowy.
-- Użyj odpowiednich inputów, textarea, select/radio i etykiet.
-- Dodaj krótkie pomocnicze opisy tam, gdzie poprawiają zrozumienie.
-- Przyciski: „Zapisz szkic” i główny „Utwórz ofertę”.
-- Po wysłaniu formularza przejdź do widoku pojedynczej, przykładowo wygenerowanej oferty.
-- Zaimplementuj podstawową walidację frontendową wymaganych pól i komunikaty błędów.
+### 1. Uruchom migrację
 
-5. Historia ofert „/offers”
-- Lista wszystkich zapisanych ofert.
-- Wyszukiwarka po nazwie klienta lub usłudze.
-- Prosty filtr statusu: Wszystkie, Szkic, Gotowa, Wysłana.
-- Tabela na desktopie, karty na telefonie.
-- Akcja „Zobacz ofertę”.
-- Bez zaawansowanych filtrów i eksportów.
+Otwórz projekt Supabase, przejdź do **SQL Editor**, utwórz nowe zapytanie i uruchom zawartość pliku:
 
-6. Widok pojedynczej oferty „/offers/:id”
-- Profesjonalny podgląd dokumentu/oferty.
-- Nagłówek z nazwą usługodawcy „Studio Nova” oraz numerem oferty.
-- Dane klienta, data, termin ważności.
-- Sekcje: Wprowadzenie, Zrozumienie problemu, Proponowane rozwiązanie, Zakres prac, Harmonogram, Cena, Warunki współpracy, Kolejne kroki.
-- Użyj realistycznego tekstu przykładowego.
-- Przyciski: „Edytuj”, „Oznacz jako wysłaną”, „Wróć do historii”.
-- Nie dodawaj eksportu PDF ani wysyłki e-mail na tym etapie.
+```text
+supabase/migrations/20260730234000_initial_schema.sql
+```
 
-Wymagania funkcjonalne frontendu:
-- Działające linki i routing pomiędzy wszystkimi stronami.
-- Mockowane dane ofert w jednym, łatwym do późniejszego zastąpienia miejscu.
-- Formularz może przechowywać dane w stanie lokalnym lub localStorage, aby demonstracja wyglądała wiarygodnie.
-- Dodaj toast/potwierdzenie po zapisaniu szkicu i oznaczeniu oferty jako wysłanej.
-- Stany hover, active, focus i disabled.
-- Brak niedziałających przycisków; każda widoczna akcja powinna mieć sensowną reakcję.
+Migracja tworzy:
 
-Ograniczenia:
-- Nie dodawaj integracji AI.
-- Nie dodawaj prawdziwego uwierzytelniania.
-- Nie dodawaj Supabase ani bazy danych.
-- Nie dodawaj płatności, cennika, faktur, CRM, czatu, zespołów, ustawień konta ani innych funkcji spoza zakresu.
-- Nie rozbudowuj produktu poza opisane MVP.
+- `profiles`,
+- `leads`,
+- `offers`,
+- triggery profilu i `updated_at`,
+- indeksy,
+- ograniczenia statusów i ceny,
+- kompletne polityki RLS.
 
-Na końcu sprawdź responsywność i spójność wszystkich ekranów oraz upewnij się, że projekt uruchamia się bez błędów.
+### 2. Ustaw adresy Auth
 
-This project was built with [Lovable](https://lovable.dev).
+W Supabase przejdź do **Authentication → URL Configuration**.
 
-## Build with Lovable
+Ustaw:
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/17cfad05-b039-496c-8a1e-92b182b5bb7f).
+```text
+Site URL: https://incandescent-cupcake-5346be.netlify.app
+```
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+Dodaj ten sam adres do **Redirect URLs**, najlepiej również z wariantem:
+
+```text
+https://incandescent-cupcake-5346be.netlify.app/**
+```
+
+Jeżeli aplikacja dostanie własną domenę, trzeba dodać ją w tym samym miejscu.
+
+### 3. Zmienne środowiskowe
+
+Skopiuj `.env.example` do `.env.local` podczas pracy lokalnej:
+
+```sh
+cp .env.example .env.local
+```
+
+Uzupełnij:
+
+```text
+VITE_SUPABASE_URL=https://twoj-projekt.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
+```
+
+Używaj wyłącznie klucza `publishable`/`anon`. Nigdy nie dodawaj `service_role` ani `sb_secret_` do frontendu.
+
+## Konfiguracja Netlify
+
+W **Site configuration → Environment variables** ustaw:
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+```
+
+Po zmianie zmiennych uruchom nowy deploy. Build powinien publikować katalog `dist`.
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+```sh
+bun install
+bun run dev
+```
+
+Build produkcyjny:
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun run build
 ```
+
+## Stos technologiczny
+
+- React 19,
+- TypeScript,
+- TanStack Router i TanStack Query,
+- Tailwind CSS i shadcn/ui,
+- Supabase Auth + PostgreSQL + RLS,
+- Netlify.
+
+## Kolejny etap produktu
+
+Dopiero po przetestowaniu obecnego procesu z prawdziwymi freelancerami warto dodać:
+
+1. reguły automatycznej wyceny,
+2. generowanie treści oferty przez backendową funkcję AI,
+3. wysyłanie oferty e-mailem,
+4. przypomnienia o follow-upie.
+
+Nie należy dodawać tych funkcji, dopóki rejestracja, zapis ofert i bezpieczeństwo RLS nie działają stabilnie.

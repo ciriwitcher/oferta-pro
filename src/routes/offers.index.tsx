@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { PlusCircle, Search } from "lucide-react";
+import { Loader2, PlusCircle, Search } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { OffersList } from "@/components/offers-list";
 import { Button } from "@/components/ui/button";
@@ -22,24 +22,29 @@ export const Route = createFileRoute("/offers/")({
   component: OffersHistory,
 });
 
-const filters: { value: OfferStatus | "wszystkie"; label: string }[] = [
-  { value: "wszystkie", label: "Wszystkie" },
-  { value: "szkic", label: "Szkic" },
-  { value: "gotowa", label: "Gotowa" },
-  { value: "wyslana", label: "Wysłana" },
+const filters: { value: OfferStatus | "all"; label: string }[] = [
+  { value: "all", label: "Wszystkie" },
+  { value: "draft", label: "Szkic" },
+  { value: "ready", label: "Gotowa" },
+  { value: "sent", label: "Wysłana" },
+  { value: "accepted", label: "Zaakceptowana" },
+  { value: "rejected", label: "Odrzucona" },
 ];
 
 function OffersHistory() {
-  const offers = useOffers();
+  const { data: offers = [], isLoading, error, refetch } = useOffers();
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<OfferStatus | "wszystkie">("wszystkie");
+  const [status, setStatus] = useState<OfferStatus | "all">("all");
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return offers.filter((o) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return offers.filter((offer) => {
       const matchesQuery =
-        !q || o.client.toLowerCase().includes(q) || o.service.toLowerCase().includes(q);
-      const matchesStatus = status === "wszystkie" || o.status === status;
+        !normalizedQuery ||
+        offer.client.toLowerCase().includes(normalizedQuery) ||
+        offer.service.toLowerCase().includes(normalizedQuery) ||
+        offer.clientEmail.toLowerCase().includes(normalizedQuery);
+      const matchesStatus = status === "all" || offer.status === status;
       return matchesQuery && matchesStatus;
     });
   }, [offers, query, status]);
@@ -50,7 +55,7 @@ function OffersHistory() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold sm:text-3xl">Historia ofert</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Wszystkie zapisane oferty wraz z ich statusem.
+            Wszystkie zapytania i oferty zapisane na Twoim koncie.
           </p>
         </div>
         <Button asChild className="w-full shrink-0 sm:w-auto">
@@ -73,41 +78,67 @@ function OffersHistory() {
               id="szukaj"
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Nazwa klienta lub usługa"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Klient, usługa lub e-mail"
               className="pl-9"
             />
           </div>
         </div>
 
         <div role="group" aria-label="Filtr statusu" className="flex flex-wrap gap-2">
-          {filters.map((f) => (
+          {filters.map((filter) => (
             <button
-              key={f.value}
+              key={filter.value}
               type="button"
-              aria-pressed={status === f.value}
-              onClick={() => setStatus(f.value)}
+              aria-pressed={status === filter.value}
+              onClick={() => setStatus(filter.value)}
               className={cn(
                 "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                status === f.value
+                status === filter.value
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
-              {f.label}
+              {filter.label}
             </button>
           ))}
         </div>
       </div>
 
-      <p className="mt-6 text-sm text-muted-foreground" aria-live="polite">
-        Znaleziono {filtered.length} z {offers.length} ofert.
-      </p>
-
-      <div className="mt-4">
-        <OffersList offers={filtered} actionLabel="Zobacz ofertę" />
-      </div>
+      {isLoading ? (
+        <div className="mt-8 flex items-center justify-center gap-3 rounded-xl border border-border bg-card p-10 text-sm text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          Pobieranie historii…
+        </div>
+      ) : error ? (
+        <div className="mt-8 rounded-xl border border-destructive/30 bg-destructive/10 p-6">
+          <p className="font-medium text-destructive">Nie udało się pobrać ofert.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {error instanceof Error ? error.message : "Sprawdź połączenie z Supabase."}
+          </p>
+          <Button variant="outline" className="mt-4" onClick={() => refetch()}>
+            Spróbuj ponownie
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="mt-6 text-sm text-muted-foreground" aria-live="polite">
+            Znaleziono {filtered.length} z {offers.length} ofert.
+          </p>
+          <div className="mt-4">
+            <OffersList
+              offers={filtered}
+              actionLabel="Zobacz ofertę"
+              emptyMessage={
+                offers.length === 0
+                  ? "Nie masz jeszcze żadnych ofert. Utwórz pierwszą ofertę, aby rozpocząć pracę."
+                  : "Brak ofert spełniających wybrane kryteria."
+              }
+            />
+          </div>
+        </>
+      )}
     </AppLayout>
   );
 }

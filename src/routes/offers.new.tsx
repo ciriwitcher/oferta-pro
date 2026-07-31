@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
@@ -8,13 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { offersStore, toneLabels, type OfferTone } from "@/data/offers";
+import { createOffer, toneLabels, type NewOfferInput, type OfferTone } from "@/data/offers";
 
 export const Route = createFileRoute("/offers/new")({
   head: () => ({
     meta: [
       { title: "Nowa oferta — AI Oferta" },
-      { name: "description", content: "Wypełnij formularz i przygotuj ofertę dla klienta." },
+      { name: "description", content: "Zapisz zapytanie klienta i przygotuj uporządkowaną ofertę." },
       { property: "og:title", content: "Nowa oferta — AI Oferta" },
       { property: "og:description", content: "Formularz tworzenia oferty w AI Oferta." },
     ],
@@ -23,6 +24,18 @@ export const Route = createFileRoute("/offers/new")({
 });
 
 type Errors = Record<string, string>;
+
+type CollectedValues = {
+  client: string;
+  clientEmail: string;
+  industry: string;
+  problem: string;
+  service: string;
+  scope: string;
+  price: string;
+  deliveryTime: string;
+  notes: string;
+};
 
 function FieldWrap({
   id,
@@ -35,7 +48,7 @@ function FieldWrap({
   label: string;
   hint?: string;
   error?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="space-y-2">
@@ -55,74 +68,118 @@ function FieldWrap({
   );
 }
 
-const tones: OfferTone[] = ["formalny", "partnerski", "sprzedazowy"];
+const tones: OfferTone[] = ["formal", "partner", "sales"];
 const toneHints: Record<OfferTone, string> = {
-  formalny: "Dla instytucji, kancelarii i klientów korporacyjnych.",
-  partnerski: "Swobodny, ale rzeczowy — dla małych firm i stałych klientów.",
-  sprzedazowy: "Podkreśla korzyści i zachęca do szybkiej decyzji.",
+  formal: "Dla instytucji, kancelarii i klientów korporacyjnych.",
+  partner: "Swobodny, ale rzeczowy — dla małych firm i stałych klientów.",
+  sales: "Podkreśla korzyści i zachęca do podjęcia decyzji.",
 };
+
+function collect(form: HTMLFormElement): CollectedValues {
+  const data = new FormData(form);
+  const get = (key: string) => String(data.get(key) ?? "").trim();
+  return {
+    client: get("client"),
+    clientEmail: get("clientEmail"),
+    industry: get("industry"),
+    problem: get("problem"),
+    service: get("service"),
+    scope: get("scope"),
+    price: get("price"),
+    deliveryTime: get("deliveryTime"),
+    notes: get("notes"),
+  };
+}
+
+function validate(values: CollectedValues, mode: "draft" | "ready") {
+  const errors: Errors = {};
+  if (!values.client) errors.client = "Podaj nazwę klienta.";
+  if (!values.problem) errors.problem = "Opisz problem klienta.";
+  if (!values.service) errors.service = "Podaj proponowaną usługę.";
+
+  if (values.clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.clientEmail)) {
+    errors.clientEmail = "Podaj poprawny adres e-mail.";
+  }
+
+  if (values.price) {
+    const parsedPrice = Number(values.price.replace(",", "."));
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) errors.price = "Cena musi być liczbą nie mniejszą od zera.";
+  }
+
+  if (mode === "ready") {
+    if (!values.industry) errors.industry = "Podaj branżę klienta.";
+    if (!values.scope) errors.scope = "Opisz zakres prac.";
+    if (!values.price) errors.price = "Podaj cenę.";
+    if (!values.deliveryTime) errors.deliveryTime = "Podaj termin realizacji.";
+  }
+
+  return errors;
+}
 
 function NewOffer() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [errors, setErrors] = useState<Errors>({});
-  const [tone, setTone] = useState<OfferTone>("partnerski");
+  const [tone, setTone] = useState<OfferTone>("partner");
+  const [savingMode, setSavingMode] = useState<"draft" | "ready" | null>(null);
 
-  function collect(form: HTMLFormElement) {
-    const d = new FormData(form);
-    const get = (k: string) => String(d.get(k) ?? "").trim();
-    return {
-      client: get("client"),
-      industry: get("industry"),
-      problem: get("problem"),
-      service: get("service"),
-      scope: get("scope"),
-      price: get("price"),
-      deadline: get("deadline"),
-      notes: get("notes"),
-    };
-  }
-
-  function validate(v: ReturnType<typeof collect>) {
-    const e: Errors = {};
-    if (!v.client) e.client = "Podaj nazwę klienta.";
-    if (!v.industry) e.industry = "Podaj branżę klienta.";
-    if (!v.problem) e.problem = "Opisz problem klienta.";
-    if (!v.service) e.service = "Podaj proponowaną usługę.";
-    if (!v.scope) e.scope = "Opisz zakres prac.";
-    if (!v.price) e.price = "Podaj cenę.";
-    else if (Number.isNaN(Number(v.price)) || Number(v.price) <= 0)
-      e.price = "Cena musi być liczbą większą od zera.";
-    if (!v.deadline) e.deadline = "Podaj termin realizacji.";
-    return e;
-  }
-
-  function save(form: HTMLFormElement, status: "szkic" | "gotowa") {
-    const v = collect(form);
-    const e = validate(v);
-    setErrors(e);
-    if (Object.keys(e).length) {
-      toast.error("Uzupełnij wymagane pola formularza.");
+  async function save(form: HTMLFormElement, status: "draft" | "ready") {
+    const values = collect(form);
+    const nextErrors = validate(values, status);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      toast.error(
+        status === "draft"
+          ? "Aby zapisać szkic, podaj klienta, problem i usługę."
+          : "Uzupełnij wymagane pola oferty.",
+      );
       return null;
     }
-    return offersStore.add({ ...v, price: Number(v.price), tone, status });
+
+    const input: NewOfferInput = {
+      client: values.client,
+      clientEmail: values.clientEmail,
+      industry: values.industry,
+      problem: values.problem,
+      service: values.service,
+      scope: values.scope,
+      price: values.price ? Number(values.price.replace(",", ".")) : null,
+      deliveryTime: values.deliveryTime,
+      notes: values.notes,
+      tone,
+    };
+
+    setSavingMode(status);
+    try {
+      const created = await createOffer(input, status);
+      await queryClient.invalidateQueries({ queryKey: ["offers"] });
+      return created;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nie udało się zapisać oferty.");
+      return null;
+    } finally {
+      setSavingMode(null);
+    }
   }
 
-  function onSubmit(ev: FormEvent<HTMLFormElement>) {
-    ev.preventDefault();
-    const created = save(ev.currentTarget, "gotowa");
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const created = await save(event.currentTarget, "ready");
     if (!created) return;
     toast.success("Oferta została utworzona.");
     navigate({ to: "/offers/$id", params: { id: created.id } });
   }
 
-  function onSaveDraft(ev: React.MouseEvent<HTMLButtonElement>) {
-    const form = ev.currentTarget.form;
+  async function onSaveDraft(event: React.MouseEvent<HTMLButtonElement>) {
+    const form = event.currentTarget.form;
     if (!form) return;
-    const created = save(form, "szkic");
+    const created = await save(form, "draft");
     if (!created) return;
     toast.success("Szkic oferty został zapisany.");
     navigate({ to: "/offers" });
   }
+
+  const saving = savingMode !== null;
 
   return (
     <AppLayout>
@@ -135,13 +192,13 @@ function NewOffer() {
 
       <h1 className="text-2xl font-bold sm:text-3xl">Nowa oferta</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-        Im więcej konkretów podasz, tym bardziej dopasowany będzie gotowy dokument. Pola oznaczone
-        gwiazdką są wymagane.
+        Zapisz zapytanie klienta, wycenę i zakres współpracy. Szkic wymaga tylko podstawowych danych;
+        oferta gotowa wymaga uzupełnienia całego zakresu.
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-6">
         <section className="rounded-xl border border-border bg-card p-5 shadow-soft sm:p-6">
-          <h2 className="text-lg font-semibold">Klient</h2>
+          <h2 className="text-lg font-semibold">Klient i zapytanie</h2>
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             <FieldWrap id="client" label="Nazwa klienta *" error={errors.client}>
               <Input
@@ -152,10 +209,21 @@ function NewOffer() {
                 aria-describedby={errors.client ? "client-error" : undefined}
               />
             </FieldWrap>
+            <FieldWrap id="clientEmail" label="E-mail klienta" error={errors.clientEmail}>
+              <Input
+                id="clientEmail"
+                name="clientEmail"
+                type="email"
+                autoComplete="email"
+                placeholder="kontakt@klient.pl"
+                aria-invalid={!!errors.clientEmail}
+                aria-describedby={errors.clientEmail ? "clientEmail-error" : undefined}
+              />
+            </FieldWrap>
             <FieldWrap
               id="industry"
-              label="Branża klienta *"
-              hint="Np. gastronomia, usługi prawne, e-commerce."
+              label="Branża klienta"
+              hint="Wymagana, gdy tworzysz gotową ofertę."
               error={errors.industry}
             >
               <Input
@@ -172,15 +240,15 @@ function NewOffer() {
           <div className="mt-5">
             <FieldWrap
               id="problem"
-              label="Problem klienta *"
-              hint="Czego klientowi brakuje i co chce osiągnąć."
+              label="Problem lub potrzeba klienta *"
+              hint="Wklej lub streść zapytanie klienta."
               error={errors.problem}
             >
               <Textarea
                 id="problem"
                 name="problem"
                 rows={4}
-                placeholder="Klienci nie znajdują firmy w wyszukiwarce…"
+                placeholder="Klient potrzebuje strony, która pozwoli przyjmować zamówienia online…"
                 aria-invalid={!!errors.problem}
                 aria-describedby={
                   ["problem-hint", errors.problem ? "problem-error" : ""].filter(Boolean).join(" ")
@@ -191,28 +259,28 @@ function NewOffer() {
         </section>
 
         <section className="rounded-xl border border-border bg-card p-5 shadow-soft sm:p-6">
-          <h2 className="text-lg font-semibold">Zakres współpracy</h2>
+          <h2 className="text-lg font-semibold">Wycena i zakres współpracy</h2>
           <div className="mt-5 space-y-5">
             <FieldWrap id="service" label="Proponowana usługa *" error={errors.service}>
               <Input
                 id="service"
                 name="service"
-                placeholder="Strona internetowa z zamówieniami"
+                placeholder="Strona internetowa z formularzem zamówień"
                 aria-invalid={!!errors.service}
                 aria-describedby={errors.service ? "service-error" : undefined}
               />
             </FieldWrap>
             <FieldWrap
               id="scope"
-              label="Zakres prac *"
-              hint="Wypisz najważniejsze elementy, np. projekt, wdrożenie, szkolenie."
+              label="Zakres prac"
+              hint="Wypisz najważniejsze elementy realizacji."
               error={errors.scope}
             >
               <Textarea
                 id="scope"
                 name="scope"
                 rows={4}
-                placeholder="Projekt graficzny, wdrożenie, formularz zamówień…"
+                placeholder="Projekt graficzny, wdrożenie, formularz zamówień, konfiguracja analityki…"
                 aria-invalid={!!errors.scope}
                 aria-describedby={
                   ["scope-hint", errors.scope ? "scope-error" : ""].filter(Boolean).join(" ")
@@ -220,32 +288,34 @@ function NewOffer() {
               />
             </FieldWrap>
             <div className="grid gap-5 sm:grid-cols-2">
-              <FieldWrap id="price" label="Cena (PLN) *" error={errors.price}>
+              <FieldWrap id="price" label="Cena (PLN)" error={errors.price}>
                 <Input
                   id="price"
                   name="price"
                   type="number"
                   min="0"
                   step="100"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   placeholder="8400"
                   aria-invalid={!!errors.price}
                   aria-describedby={errors.price ? "price-error" : undefined}
                 />
               </FieldWrap>
               <FieldWrap
-                id="deadline"
-                label="Termin realizacji *"
-                hint="Np. 6 tygodni lub do 30 września."
-                error={errors.deadline}
+                id="deliveryTime"
+                label="Termin realizacji"
+                hint="Np. 6 tygodni od dostarczenia materiałów."
+                error={errors.deliveryTime}
               >
                 <Input
-                  id="deadline"
-                  name="deadline"
-                  placeholder="6 tygodni"
-                  aria-invalid={!!errors.deadline}
+                  id="deliveryTime"
+                  name="deliveryTime"
+                  placeholder="6 tygodni od akceptacji"
+                  aria-invalid={!!errors.deliveryTime}
                   aria-describedby={
-                    ["deadline-hint", errors.deadline ? "deadline-error" : ""].filter(Boolean).join(" ")
+                    ["deliveryTime-hint", errors.deliveryTime ? "deliveryTime-error" : ""]
+                      .filter(Boolean)
+                      .join(" ")
                   }
                 />
               </FieldWrap>
@@ -253,13 +323,13 @@ function NewOffer() {
             <FieldWrap
               id="notes"
               label="Dodatkowe informacje"
-              hint="Ustalenia, ograniczenia budżetowe, materiały od klienta."
+              hint="Ustalenia, ograniczenia budżetowe i materiały dostarczane przez klienta."
             >
               <Textarea
                 id="notes"
                 name="notes"
                 rows={3}
-                placeholder="Klient dysponuje własnymi zdjęciami produktów."
+                placeholder="Klient dostarcza własne zdjęcia i treści."
                 aria-describedby="notes-hint"
               />
             </FieldWrap>
@@ -269,24 +339,24 @@ function NewOffer() {
         <section className="rounded-xl border border-border bg-card p-5 shadow-soft sm:p-6">
           <h2 className="text-lg font-semibold">Ton oferty</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Wpływa na styl języka w gotowym dokumencie.
+            Określa sposób przedstawienia propozycji w podglądzie dokumentu.
           </p>
           <RadioGroup
             value={tone}
-            onValueChange={(v) => setTone(v as OfferTone)}
+            onValueChange={(value) => setTone(value as OfferTone)}
             className="mt-5 grid gap-3 sm:grid-cols-3"
           >
-            {tones.map((t) => (
+            {tones.map((item) => (
               <Label
-                key={t}
-                htmlFor={`ton-${t}`}
+                key={item}
+                htmlFor={`ton-${item}`}
                 className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-secondary has-[:checked]:border-primary has-[:checked]:bg-accent"
               >
-                <RadioGroupItem id={`ton-${t}`} value={t} className="mt-0.5" />
+                <RadioGroupItem id={`ton-${item}`} value={item} className="mt-0.5" />
                 <span className="min-w-0">
-                  <span className="block font-medium">{toneLabels[t]}</span>
+                  <span className="block font-medium">{toneLabels[item]}</span>
                   <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                    {toneHints[t]}
+                    {toneHints[item]}
                   </span>
                 </span>
               </Label>
@@ -295,10 +365,14 @@ function NewOffer() {
         </section>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onSaveDraft}>
-            Zapisz szkic
+          <Button type="button" variant="outline" onClick={onSaveDraft} disabled={saving}>
+            {savingMode === "draft" && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {savingMode === "draft" ? "Zapisywanie…" : "Zapisz szkic"}
           </Button>
-          <Button type="submit">Utwórz ofertę</Button>
+          <Button type="submit" disabled={saving}>
+            {savingMode === "ready" && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {savingMode === "ready" ? "Tworzenie…" : "Utwórz ofertę"}
+          </Button>
         </div>
       </form>
     </AppLayout>

@@ -1,184 +1,199 @@
-/**
- * Jedyne miejsce z danymi ofert (mock + localStorage).
- * Docelowo wystarczy podmienić implementację na wywołania API.
- */
+import { getSupabase } from "@/lib/supabase";
 
-export type OfferStatus = "szkic" | "gotowa" | "wyslana";
-export type OfferTone = "formalny" | "partnerski" | "sprzedazowy";
+export type OfferStatus = "draft" | "ready" | "sent" | "accepted" | "rejected" | "archived";
+export type OfferTone = "formal" | "partner" | "sales";
 
 export type Offer = {
   id: string;
+  leadId: string;
   client: string;
+  clientEmail: string;
   industry: string;
   problem: string;
   service: string;
   scope: string;
-  price: number;
-  deadline: string;
+  price: number | null;
+  deliveryTime: string;
   notes: string;
-  tone: OfferTone;
+  tone: OfferTone | null;
   status: OfferStatus;
-  createdAt: string; // ISO
+  createdAt: string;
+  updatedAt: string;
   number: string;
 };
 
+export type NewOfferInput = {
+  client: string;
+  clientEmail: string;
+  industry: string;
+  problem: string;
+  service: string;
+  scope: string;
+  price: number | null;
+  deliveryTime: string;
+  notes: string;
+  tone: OfferTone | null;
+};
+
+type LeadRow = {
+  id: string;
+  user_id: string;
+  client_name: string;
+  client_email: string | null;
+  industry: string | null;
+  client_problem: string;
+  proposed_service: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type OfferRow = {
+  id: string;
+  user_id: string;
+  lead_id: string;
+  scope: string | null;
+  price: number | string | null;
+  delivery_time: string | null;
+  additional_information: string | null;
+  tone: OfferTone | null;
+  status: OfferStatus;
+  created_at: string;
+  updated_at: string;
+};
+
 export const statusLabels: Record<OfferStatus, string> = {
-  szkic: "Szkic",
-  gotowa: "Gotowa",
-  wyslana: "Wysłana",
+  draft: "Szkic",
+  ready: "Gotowa",
+  sent: "Wysłana",
+  accepted: "Zaakceptowana",
+  rejected: "Odrzucona",
+  archived: "Archiwalna",
 };
 
 export const toneLabels: Record<OfferTone, string> = {
-  formalny: "Formalny",
-  partnerski: "Partnerski",
-  sprzedazowy: "Sprzedażowy",
+  formal: "Formalny",
+  partner: "Partnerski",
+  sales: "Sprzedażowy",
 };
 
-export const providerName = "Studio Nova";
-
-const seedOffers: Offer[] = [
-  {
-    id: "1",
-    number: "OF/2026/041",
-    client: "Piekarnia Zbożowa",
-    industry: "Gastronomia",
-    problem:
-      "Klienci nie znajdują piekarni w wyszukiwarce, a zamówienia firmowe przyjmowane są telefonicznie.",
-    service: "Strona internetowa z zamówieniami",
-    scope:
-      "Projekt graficzny, wdrożenie strony, formularz zamówień hurtowych, podstawowa optymalizacja SEO.",
-    price: 8400,
-    deadline: "6 tygodni",
-    notes: "Klient dysponuje własnymi zdjęciami produktów.",
-    tone: "partnerski",
-    status: "wyslana",
-    createdAt: "2026-07-14",
-  },
-  {
-    id: "2",
-    number: "OF/2026/040",
-    client: "Kancelaria Malinowski i Wspólnicy",
-    industry: "Usługi prawne",
-    problem: "Wizerunek kancelarii w internecie nie odpowiada jakości świadczonych usług.",
-    service: "Identyfikacja wizualna i strona wizytówka",
-    scope: "Logo, księga znaku, materiały firmowe, jednostronicowa witryna.",
-    price: 12500,
-    deadline: "8 tygodni",
-    notes: "Wymagany formalny ton komunikacji.",
-    tone: "formalny",
-    status: "gotowa",
-    createdAt: "2026-07-09",
-  },
-  {
-    id: "3",
-    number: "OF/2026/038",
-    client: "FitZone Studio",
-    industry: "Fitness",
-    problem: "Brak stałego napływu nowych klientów po sezonie letnim.",
-    service: "Kampania reklamowa w mediach społecznościowych",
-    scope: "Strategia, 12 kreacji graficznych, prowadzenie kampanii przez 2 miesiące, raport.",
-    price: 5600,
-    deadline: "2 miesiące",
-    notes: "Budżet mediowy po stronie klienta.",
-    tone: "sprzedazowy",
-    status: "szkic",
-    createdAt: "2026-07-02",
-  },
-  {
-    id: "4",
-    number: "OF/2026/035",
-    client: "TechParts Sp. z o.o.",
-    industry: "Handel B2B",
-    problem: "Ręczne przygotowywanie wycen zajmuje handlowcom kilka godzin dziennie.",
-    service: "Aplikacja do wycen wewnętrznych",
-    scope: "Analiza procesu, projekt interfejsu, wdrożenie aplikacji webowej, szkolenie zespołu.",
-    price: 26000,
-    deadline: "3 miesiące",
-    notes: "Integracja z istniejącym systemem magazynowym w kolejnym etapie.",
-    tone: "formalny",
-    status: "wyslana",
-    createdAt: "2026-06-24",
-  },
-  {
-    id: "5",
-    number: "OF/2026/031",
-    client: "Pracownia Ceramiki Glina",
-    industry: "Rękodzieło",
-    problem: "Sprzedaż odbywa się wyłącznie na targach lokalnych.",
-    service: "Sklep internetowy",
-    scope: "Konfiguracja sklepu, wdrożenie płatności, migracja 40 produktów, instrukcja obsługi.",
-    price: 7200,
-    deadline: "5 tygodni",
-    notes: "Klient prosi o szkolenie z dodawania produktów.",
-    tone: "partnerski",
-    status: "szkic",
-    createdAt: "2026-06-11",
-  },
-];
-
-const STORAGE_KEY = "ai-oferta:offers";
-
-let offers: Offer[] = seedOffers;
-let loaded = false;
-const listeners = new Set<() => void>();
-
-function load() {
-  if (loaded || typeof window === "undefined") return;
-  loaded = true;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) offers = JSON.parse(raw) as Offer[];
-  } catch {
-    // ignorujemy uszkodzone dane
-  }
+function makeOfferNumber(createdAt: string, id: string) {
+  const date = new Date(createdAt);
+  const year = Number.isNaN(date.getTime()) ? new Date().getFullYear() : date.getFullYear();
+  return `OF/${year}/${id.slice(0, 8).toUpperCase()}`;
 }
 
-function persist() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(offers));
-  } catch {
-    // brak dostępu do localStorage – dane pozostają w pamięci
-  }
-  listeners.forEach((l) => l());
+function mapOffer(row: OfferRow, lead: LeadRow): Offer {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    client: lead.client_name,
+    clientEmail: lead.client_email ?? "",
+    industry: lead.industry ?? "",
+    problem: lead.client_problem,
+    service: lead.proposed_service,
+    scope: row.scope ?? "",
+    price: row.price == null ? null : Number(row.price),
+    deliveryTime: row.delivery_time ?? "",
+    notes: row.additional_information ?? "",
+    tone: row.tone,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    number: makeOfferNumber(row.created_at, row.id),
+  };
 }
 
-export const offersStore = {
-  subscribe(listener: () => void) {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  },
-  getSnapshot(): Offer[] {
-    load();
-    return offers;
-  },
-  getServerSnapshot(): Offer[] {
-    return seedOffers;
-  },
-  get(id: string) {
-    load();
-    return offers.find((o) => o.id === id);
-  },
-  add(offer: Omit<Offer, "id" | "number" | "createdAt">): Offer {
-    load();
-    const next: Offer = {
-      ...offer,
-      id: String(Date.now()),
-      number: `OF/2026/${String(42 + offers.length).padStart(3, "0")}`,
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    offers = [next, ...offers];
-    persist();
-    return next;
-  },
-  setStatus(id: string, status: OfferStatus) {
-    load();
-    offers = offers.map((o) => (o.id === id ? { ...o, status } : o));
-    persist();
-  },
-};
+export async function fetchOffers(): Promise<Offer[]> {
+  const client = getSupabase();
+  const { data: offerRows, error: offersError } = await client
+    .from("offers")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-export function formatPrice(value: number) {
+  if (offersError) throw offersError;
+  if (!offerRows?.length) return [];
+
+  const leadIds = [...new Set((offerRows as OfferRow[]).map((offer) => offer.lead_id))];
+  const { data: leadRows, error: leadsError } = await client.from("leads").select("*").in("id", leadIds);
+
+  if (leadsError) throw leadsError;
+
+  const leadsById = new Map((leadRows as LeadRow[] | null)?.map((lead) => [lead.id, lead]) ?? []);
+
+  return (offerRows as OfferRow[])
+    .map((offer) => {
+      const lead = leadsById.get(offer.lead_id);
+      return lead ? mapOffer(offer, lead) : null;
+    })
+    .filter((offer): offer is Offer => offer !== null);
+}
+
+export async function createOffer(input: NewOfferInput, status: "draft" | "ready") {
+  const client = getSupabase();
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser();
+
+  if (userError) throw userError;
+  if (!user) throw new Error("Sesja wygasła. Zaloguj się ponownie.");
+
+  const { data: lead, error: leadError } = await client
+    .from("leads")
+    .insert({
+      user_id: user.id,
+      client_name: input.client,
+      client_email: input.clientEmail || null,
+      industry: input.industry || null,
+      client_problem: input.problem,
+      proposed_service: input.service,
+      status: "active",
+    })
+    .select("*")
+    .single();
+
+  if (leadError) throw leadError;
+
+  const { data: offer, error: offerError } = await client
+    .from("offers")
+    .insert({
+      user_id: user.id,
+      lead_id: lead.id,
+      scope: input.scope || null,
+      price: input.price,
+      delivery_time: input.deliveryTime || null,
+      additional_information: input.notes || null,
+      tone: input.tone,
+      status,
+    })
+    .select("*")
+    .single();
+
+  if (offerError) {
+    await client.from("leads").delete().eq("id", lead.id);
+    throw offerError;
+  }
+
+  return mapOffer(offer as OfferRow, lead as LeadRow);
+}
+
+export async function updateOfferStatus(id: string, status: OfferStatus) {
+  const { error } = await getSupabase()
+    .from("offers")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function deleteOfferByLead(leadId: string) {
+  const { error } = await getSupabase().from("leads").delete().eq("id", leadId);
+  if (error) throw error;
+}
+
+export function formatPrice(value: number | null) {
+  if (value == null) return "Nie ustalono";
   return new Intl.NumberFormat("pl-PL", {
     style: "currency",
     currency: "PLN",
@@ -187,5 +202,7 @@ export function formatPrice(value: number) {
 }
 
 export function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium" }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium" }).format(date);
 }
