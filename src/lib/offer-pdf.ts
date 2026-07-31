@@ -1,10 +1,16 @@
 import type { Offer } from "@/data/offers";
-import type { ProviderDocumentData } from "@/data/provider";
+import {
+  getCachedProviderProfile,
+  toProviderDocumentDataWithFallback,
+  type ProviderDocumentData,
+} from "@/data/provider";
 import { downloadOfferPdf as generateOfferPdf } from "@/lib/offer-pdf-generator-v2";
 
 type PdfInput = {
   offer: Offer;
-  provider: ProviderDocumentData;
+  provider?: ProviderDocumentData;
+  providerName?: string;
+  providerEmail?: string;
 };
 
 function isAppleMobileDevice() {
@@ -37,6 +43,14 @@ export async function downloadOfferPdf(input: PdfInput) {
     throw new Error("PDF można wygenerować wyłącznie w przeglądarce.");
   }
 
+  const provider =
+    input.provider ??
+    toProviderDocumentDataWithFallback(
+      getCachedProviderProfile(),
+      input.providerName || "Wykonawca",
+      input.providerEmail,
+    );
+
   let capturedBlob: Blob | null = null;
   let capturedFilename = "oferta.pdf";
 
@@ -58,7 +72,7 @@ export async function downloadOfferPdf(input: PdfInput) {
 
   let generationPromise: Promise<void>;
   try {
-    generationPromise = generateOfferPdf(input);
+    generationPromise = generateOfferPdf({ offer: input.offer, provider });
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;
     HTMLAnchorElement.prototype.click = originalAnchorClick;
