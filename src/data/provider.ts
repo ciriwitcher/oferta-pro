@@ -29,6 +29,7 @@ export type ProviderDocumentData = {
   taxId?: string;
   address?: string;
   bankAccount?: string;
+  logoUrl?: string;
 };
 
 type ProviderRow = {
