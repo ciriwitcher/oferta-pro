@@ -96,7 +96,11 @@ function buildPdf(images: Uint8Array[]) {
   endObject();
 
   startObject(2);
-  push(`<< /Type /Pages /Count ${images.length} /Kids [${pageObjectNumbers.map((number) => `${number} 0 R`).join(" ")}] >>`);
+  push(
+    `<< /Type /Pages /Count ${images.length} /Kids [${pageObjectNumbers
+      .map((number) => `${number} 0 R`)
+      .join(" ")}] >>`,
+  );
   endObject();
 
   images.forEach((image, index) => {
@@ -236,11 +240,11 @@ export async function downloadOfferPdf({ offer, providerName, providerEmail }: P
 
     lines.forEach((line) => {
       ensureSpace(lineHeight + 8);
+      font(size, weight);
+      page.context.fillStyle = options.color ?? colors.ink;
       page.context.fillText(line || " ", x, y);
       y += lineHeight;
     });
-
-    return lines.length * lineHeight;
   }
 
   function drawSectionTitle(title: string) {
@@ -271,6 +275,7 @@ export async function downloadOfferPdf({ offer, providerName, providerEmail }: P
       const lines = wrapLines(item, CONTENT_WIDTH - bulletWidth);
       const itemHeight = Math.max(34, lines.length * 34) + 10;
       ensureSpace(itemHeight);
+      font(22, 400);
 
       page.context.fillStyle = colors.primary;
       page.context.beginPath();
@@ -366,11 +371,15 @@ export async function downloadOfferPdf({ offer, providerName, providerEmail }: P
     splitItems(offer.notes),
     "Szczegółowe warunki płatności, materiały, poprawki i elementy niewchodzące w cenę zostaną potwierdzone przed rozpoczęciem prac.",
   );
-  drawBullets("Kolejne kroki", [
-    "Potwierdzenie zakresu, ceny i terminu realizacji.",
-    "Akceptacja oferty oraz warunków rozpoczęcia prac.",
-    "Przekazanie materiałów i rozpoczęcie projektu.",
-  ], "");
+  drawBullets(
+    "Kolejne kroki",
+    [
+      "Potwierdzenie zakresu, ceny i terminu realizacji.",
+      "Akceptacja oferty oraz warunków rozpoczęcia prac.",
+      "Przekazanie materiałów i rozpoczęcie projektu.",
+    ],
+    "",
+  );
 
   ensureSpace(130);
   y += 30;
@@ -391,7 +400,6 @@ export async function downloadOfferPdf({ offer, providerName, providerEmail }: P
   }
 
   pages.forEach(({ context }, index) => {
-    font.call({} as never, 1);
     context.font = "500 15px Arial, Helvetica, sans-serif";
     context.fillStyle = colors.muted;
     context.textAlign = "right";
