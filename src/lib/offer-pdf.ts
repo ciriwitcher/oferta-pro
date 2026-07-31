@@ -1,10 +1,10 @@
 import type { Offer } from "@/data/offers";
+import type { ProviderDocumentData } from "@/data/provider";
 import { downloadOfferPdf as generateOfferPdf } from "@/lib/offer-pdf-generator";
 
 type PdfInput = {
   offer: Offer;
-  providerName: string;
-  providerEmail?: string;
+  provider: ProviderDocumentData;
 };
 
 function isAppleMobileDevice() {
