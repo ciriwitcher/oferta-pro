@@ -36,6 +36,16 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+drop policy if exists "provider_logos_select_own" on storage.objects;
+create policy "provider_logos_select_own"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'provider-logos'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
 drop policy if exists "provider_logos_insert_own" on storage.objects;
 create policy "provider_logos_insert_own"
 on storage.objects
