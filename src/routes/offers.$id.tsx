@@ -4,15 +4,17 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Check,
+  Download,
   Loader2,
   Pencil,
-  Printer,
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/app-layout";
+import { OfferForm, type OfferSaveStatus } from "@/components/offer-form";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
@@ -21,10 +23,13 @@ import {
   deleteOfferByLead,
   formatDate,
   formatPrice,
+  updateOffer,
   updateOfferStatus,
+  type NewOfferInput,
   type OfferStatus,
 } from "@/data/offers";
 import { getUserDisplayName, useAuth } from "@/lib/auth-context";
+import { downloadOfferPdf } from "@/lib/offer-pdf";
 
 export const Route = createFileRoute("/offers/$id")({
   head: () => ({
@@ -40,7 +45,7 @@ export const Route = createFileRoute("/offers/$id")({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-2 break-inside-avoid">
+    <section className="space-y-2">
       <h2 className="text-base font-semibold text-foreground">{title}</h2>
       <div className="text-sm leading-7 text-muted-foreground">{children}</div>
     </section>
@@ -61,6 +66,9 @@ function OfferDetail() {
   const { user } = useAuth();
   const { data: offers = [], isLoading, error } = useOffers();
   const [workingAction, setWorkingAction] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editSavingMode, setEditSavingMode] = useState<OfferSaveStatus | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const offer = offers.find((item) => item.id === id);
 
   async function changeStatus(status: OfferStatus) {
@@ -74,6 +82,41 @@ function OfferDetail() {
       toast.error(changeError instanceof Error ? changeError.message : "Nie udało się zmienić statusu.");
     } finally {
       setWorkingAction(null);
+    }
+  }
+
+  async function saveEdit(values: NewOfferInput, status: OfferSaveStatus) {
+    if (!offer) return;
+
+    setEditSavingMode(status);
+    try {
+      await updateOffer(offer.id, offer.leadId, values, status);
+      await queryClient.invalidateQueries({ queryKey: ["offers"] });
+      setEditing(false);
+      toast.success(status === "draft" ? "Zmiany zapisano jako szkic." : "Oferta została zaktualizowana.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (saveError) {
+      toast.error(saveError instanceof Error ? saveError.message : "Nie udało się zapisać zmian.");
+    } finally {
+      setEditSavingMode(null);
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!offer || downloadingPdf) return;
+
+    setDownloadingPdf(true);
+    try {
+      await downloadOfferPdf({
+        offer,
+        providerName: getUserDisplayName(user),
+        providerEmail: user?.email ?? undefined,
+      });
+      toast.success("Plik PDF został wygenerowany.");
+    } catch (pdfError) {
+      toast.error(pdfError instanceof Error ? pdfError.message : "Nie udało się wygenerować PDF.");
+    } finally {
+      setDownloadingPdf(false);
     }
   }
 
@@ -136,6 +179,40 @@ function OfferDetail() {
     );
   }
 
+  if (editing) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-sm font-medium text-primary">Edycja {offer.number}</p>
+            <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Popraw ofertę dla {offer.client}</h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Zmień zapytanie, zakres, cenę, termin albo warunki. Zapisane dane zastąpią obecną wersję oferty.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            disabled={editSavingMode !== null}
+            onClick={() => setEditing(false)}
+          >
+            <X className="size-4" aria-hidden="true" />
+            Anuluj edycję
+          </Button>
+        </div>
+
+        <OfferForm
+          initialValues={offer}
+          savingMode={editSavingMode}
+          onSave={saveEdit}
+          primaryLabel="Zapisz zmiany"
+        />
+      </AppLayout>
+    );
+  }
+
   const validUntil = new Date(offer.createdAt);
   validUntil.setDate(validUntil.getDate() + 30);
   const providerName = getUserDisplayName(user);
@@ -152,7 +229,7 @@ function OfferDetail() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-4 print:hidden sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
           <Link to="/offers">
             <ArrowLeft className="size-4" aria-hidden="true" />
@@ -161,15 +238,23 @@ function OfferDetail() {
         </Button>
 
         <div className="flex flex-wrap gap-2">
-          <Button asChild size="sm" variant="outline">
-            <Link to="/offers/$id/edit" params={{ id: offer.id }}>
-              <Pencil className="size-4" aria-hidden="true" />
-              Edytuj
-            </Link>
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Pencil className="size-4" aria-hidden="true" />
+            Edytuj
           </Button>
-          <Button size="sm" variant="outline" onClick={() => window.print()}>
-            <Printer className="size-4" aria-hidden="true" />
-            Drukuj / PDF
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={downloadingPdf}
+            onClick={handleDownloadPdf}
+          >
+            {downloadingPdf ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="size-4" aria-hidden="true" />
+            )}
+            {downloadingPdf ? "Tworzenie PDF…" : "Pobierz PDF"}
           </Button>
           <Button
             size="sm"
@@ -212,7 +297,7 @@ function OfferDetail() {
         </div>
       </div>
 
-      <article className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-card print:mt-0 print:border-0 print:p-0 print:shadow-none sm:p-10">
+      <article className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-card sm:p-10">
         <header className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
@@ -224,9 +309,7 @@ function OfferDetail() {
             </p>
             <p className="mt-1 text-xs text-muted-foreground">Numer oferty: {offer.number}</p>
           </div>
-          <div className="print:hidden">
-            <StatusBadge status={offer.status} />
-          </div>
+          <StatusBadge status={offer.status} />
         </header>
 
         <Separator className="my-7" />
@@ -281,7 +364,7 @@ function OfferDetail() {
             )}
           </Section>
 
-          <div className="grid gap-6 break-inside-avoid rounded-xl border border-border bg-secondary/40 p-5 sm:grid-cols-2">
+          <div className="grid gap-6 rounded-xl border border-border bg-secondary/40 p-5 sm:grid-cols-2">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Termin realizacji</p>
               <p className="mt-2 font-semibold text-foreground">
