@@ -1,125 +1,124 @@
-# AI Oferta / Oferta Pro
+# Oferta Pro
 
-Funkcjonalne MVP aplikacji dla freelancerów i małych firm. Użytkownik może utworzyć własne konto, zapisać zapytanie klienta, przygotować wycenę i zakres oferty oraz śledzić status sprzedaży.
+Aplikacja SaaS dla freelancerów i małych agencji, która porządkuje proces od zapytania klienta do gotowej oferty PDF.
 
-## Co działa
+## Aktualne funkcje
 
 - rejestracja i logowanie przez Supabase Auth,
-- trwała sesja po odświeżeniu strony,
-- odseparowane dane każdego użytkownika przez Row Level Security,
-- zapisywanie szkiców i gotowych ofert,
-- dashboard liczony z prawdziwych danych,
-- historia, wyszukiwarka i filtry statusów,
-- podgląd oferty,
-- statusy: szkic, gotowa, wysłana, zaakceptowana, odrzucona i archiwalna,
-- usuwanie własnych ofert.
+- potwierdzanie adresu e-mail i ponowne wysyłanie linku aktywacyjnego,
+- wykrywanie próby rejestracji zajętego adresu e-mail,
+- odzyskiwanie hasła przez bezpieczny link e-mail,
+- odseparowane dane użytkowników przez Row Level Security,
+- dane wykonawcy: freelancer, firma lub agencja,
+- tworzenie i edycja ofert,
+- szkice oraz statusy procesu sprzedaży,
+- analiza zapytania klienta przez AI,
+- zapis ustrukturyzowanej analizy razem z ofertą,
+- generowanie i pobieranie PDF,
+- obsługa zapisu PDF na urządzeniach mobilnych.
 
-Na tym etapie aplikacja nie generuje treści przez AI, nie wysyła e-maili i nie obsługuje płatności. Obecne MVP porządkuje proces ofertowania i przygotowuje fundament pod kolejne integracje.
-
-## Przepływ użytkownika
-
-1. Użytkownik tworzy konto i loguje się.
-2. Dodaje zapytanie klienta: klient, e-mail, problem i proponowana usługa.
-3. Uzupełnia zakres, cenę, termin realizacji i ton oferty.
-4. Zapisuje niekompletny szkic albo tworzy gotową ofertę.
-5. Przegląda ofertę i oznacza ją jako wysłaną.
-6. Po decyzji klienta oznacza ją jako zaakceptowaną albo odrzuconą.
-
-## Konfiguracja Supabase
-
-### 1. Uruchom migrację
-
-Otwórz projekt Supabase, przejdź do **SQL Editor**, utwórz nowe zapytanie i uruchom zawartość pliku:
+## Architektura
 
 ```text
-supabase/migrations/20260730234000_initial_schema.sql
+React + TanStack Start
+        ↓
+Vercel
+        ↓
+Supabase Auth + PostgreSQL + RLS
+        ↓
+OpenAI Responses API przez endpoint serwerowy
 ```
 
-Migracja tworzy:
+Klucz OpenAI jest odczytywany wyłącznie po stronie serwera. Nie może być umieszczany w zmiennych zaczynających się od `VITE_` ani w kodzie frontendowym.
 
-- `profiles`,
-- `leads`,
-- `offers`,
-- triggery profilu i `updated_at`,
-- indeksy,
-- ograniczenia statusów i ceny,
-- kompletne polityki RLS.
+## Konfiguracja środowiska
 
-### 2. Ustaw adresy Auth
-
-W Supabase przejdź do **Authentication → URL Configuration**.
-
-Ustaw:
-
-```text
-Site URL: https://incandescent-cupcake-5346be.netlify.app
-```
-
-Dodaj ten sam adres do **Redirect URLs**, najlepiej również z wariantem:
-
-```text
-https://incandescent-cupcake-5346be.netlify.app/**
-```
-
-Jeżeli aplikacja dostanie własną domenę, trzeba dodać ją w tym samym miejscu.
-
-### 3. Zmienne środowiskowe
-
-Skopiuj `.env.example` do `.env.local` podczas pracy lokalnej:
-
-```sh
-cp .env.example .env.local
-```
-
-Uzupełnij:
+Lokalny plik `.env.local`:
 
 ```text
 VITE_SUPABASE_URL=https://twoj-projekt.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_...
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5-mini
 ```
 
-Używaj wyłącznie klucza `publishable`/`anon`. Nigdy nie dodawaj `service_role` ani `sb_secret_` do frontendu.
+`OPENAI_MODEL` jest opcjonalny. Domyślnie aplikacja korzysta z `gpt-5-mini`.
 
-## Konfiguracja Netlify
-
-W **Site configuration → Environment variables** ustaw:
+W Vercel zmienne należy dodać w:
 
 ```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
+Project Settings → Environment Variables
 ```
 
-Po zmianie zmiennych uruchom nowy deploy. Build powinien publikować katalog `dist`.
+## Konfiguracja Supabase Auth
 
-## Development
+W `Authentication → URL Configuration` ustaw:
+
+```text
+Site URL: https://oferta-pro-cyan.vercel.app
+```
+
+Dodaj do `Redirect URLs`:
+
+```text
+https://oferta-pro-cyan.vercel.app/**
+```
+
+Przepływy uwierzytelniania korzystają z adresów:
+
+```text
+/auth/confirm
+/reset-password
+```
+
+W produkcji należy skonfigurować własny SMTP w Supabase, aby zwiększyć niezawodność dostarczania wiadomości aktywacyjnych i resetujących hasło.
+
+## Migracje Supabase
+
+Uruchamiaj pliki z katalogu:
+
+```text
+supabase/migrations
+```
+
+Najważniejsze obiekty:
+
+- `profiles`,
+- `leads`,
+- `offers`,
+- `ai_generations`,
+- polityki RLS,
+- triggery profilu i pól `updated_at`.
+
+## Uruchomienie lokalne
 
 ```sh
-bun install
-bun run dev
+npm install
+npm run dev
 ```
 
 Build produkcyjny:
 
 ```sh
-bun run build
+npm run build
+```
+
+## Hosting
+
+Produkcja działa na Vercel:
+
+```text
+https://oferta-pro-cyan.vercel.app
 ```
 
 ## Stos technologiczny
 
 - React 19,
 - TypeScript,
-- TanStack Router i TanStack Query,
-- Tailwind CSS i shadcn/ui,
+- TanStack Start, Router i Query,
+- Vite,
+- Nitro,
+- Tailwind CSS,
 - Supabase Auth + PostgreSQL + RLS,
-- Netlify.
-
-## Kolejny etap produktu
-
-Dopiero po przetestowaniu obecnego procesu z prawdziwymi freelancerami warto dodać:
-
-1. reguły automatycznej wyceny,
-2. generowanie treści oferty przez backendową funkcję AI,
-3. wysyłanie oferty e-mailem,
-4. przypomnienia o follow-upie.
-
-Nie należy dodawać tych funkcji, dopóki rejestracja, zapis ofert i bezpieczeństwo RLS nie działają stabilnie.
+- OpenAI Responses API,
+- Vercel.
