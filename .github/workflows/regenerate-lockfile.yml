@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - chore/regenerate-lockfile
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Generate package lock
         run: npm install --package-lock-only --ignore-scripts
