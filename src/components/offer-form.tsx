@@ -1,11 +1,21 @@
-import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import {
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
+import { AlertTriangle, FileText, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { NewOfferInput } from "@/data/offers";
+import {
+  analyzeClientInquiry,
+  type OfferAiAnalysis,
+} from "@/lib/ai-inquiry";
 
 export type OfferSaveStatus = "draft" | "ready";
 
@@ -105,14 +115,212 @@ function validate(values: CollectedValues, status: OfferSaveStatus) {
   return errors;
 }
 
+function listToText(items: string[]) {
+  return items.join("\n");
+}
+
+function textToList(value: string) {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function AiAnalysisEditor({
+  analysis,
+  onChange,
+  onRemove,
+}: {
+  analysis: OfferAiAnalysis;
+  onChange: (analysis: OfferAiAnalysis) => void;
+  onRemove: () => void;
+}) {
+  const confidence = Math.round(analysis.confidence * 100);
+
+  function update<K extends keyof OfferAiAnalysis>(key: K, value: OfferAiAnalysis[K]) {
+    onChange({ ...analysis, [key]: value });
+  }
+
+  return (
+    <section className="rounded-2xl border border-primary/25 bg-accent/35 p-5 shadow-soft sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+            <Sparkles className="size-4" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold">Analiza AI — sprawdź i popraw</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Kompletność zapytania: {confidence}%. AI przygotowało szkic, ale odpowiedzialność za zakres,
+              termin i treść pozostaje po stronie wykonawcy.
+            </p>
+          </div>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+          <Trash2 className="size-4" aria-hidden="true" />
+          Usuń analizę
+        </Button>
+      </div>
+
+      {analysis.assumptions.length > 0 && (
+        <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium">Założenia wymagające weryfikacji</p>
+              <ul className="mt-2 ml-4 list-disc space-y-1 text-sm text-muted-foreground">
+                {analysis.assumptions.map((item, index) => (
+                  <li key={`${item}-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-5">
+        <FieldWrap
+          id="aiProblemSummary"
+          label="Krótkie podsumowanie problemu"
+          hint="To jest interpretacja wiadomości klienta, a nie jej oryginalna treść."
+        >
+          <Textarea
+            id="aiProblemSummary"
+            rows={4}
+            value={analysis.problemSummary}
+            onChange={(event) => update("problemSummary", event.target.value)}
+          />
+        </FieldWrap>
+
+        <FieldWrap id="aiProjectGoal" label="Cel projektu">
+          <Textarea
+            id="aiProjectGoal"
+            rows={3}
+            value={analysis.projectGoal}
+            onChange={(event) => update("projectGoal", event.target.value)}
+          />
+        </FieldWrap>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <FieldWrap
+            id="aiResults"
+            label="Rezultaty dla klienta"
+            hint="Każdy rezultat wpisz w osobnej linii. Nie używaj niepotwierdzonych gwarancji."
+          >
+            <Textarea
+              id="aiResults"
+              rows={6}
+              value={listToText(analysis.resultItems)}
+              onChange={(event) => update("resultItems", textToList(event.target.value))}
+            />
+          </FieldWrap>
+
+          <FieldWrap
+            id="aiExclusions"
+            label="Elementy niewchodzące w zakres"
+            hint="Ta sekcja ogranicza późniejsze rozszerzanie projektu bez dodatkowej wyceny."
+          >
+            <Textarea
+              id="aiExclusions"
+              rows={6}
+              value={listToText(analysis.exclusionItems)}
+              onChange={(event) => update("exclusionItems", textToList(event.target.value))}
+            />
+          </FieldWrap>
+        </div>
+
+        <FieldWrap
+          id="aiQuestions"
+          label="Pytania wymagające doprecyzowania"
+          hint="Przed wysłaniem oferty odpowiedz na nie z klientem albo usuń te, które zostały już wyjaśnione."
+        >
+          <Textarea
+            id="aiQuestions"
+            rows={6}
+            value={listToText(analysis.clarifyingQuestions)}
+            onChange={(event) => update("clarifyingQuestions", textToList(event.target.value))}
+          />
+        </FieldWrap>
+
+        <FieldWrap
+          id="aiOfferText"
+          label="Profesjonalna treść oferty"
+          hint="Tekst wprowadzający przeznaczony dla klienta. Możesz go dowolnie zmienić."
+        >
+          <Textarea
+            id="aiOfferText"
+            rows={9}
+            value={analysis.professionalOfferText}
+            onChange={(event) => update("professionalOfferText", event.target.value)}
+          />
+        </FieldWrap>
+      </div>
+    </section>
+  );
+}
+
 export function OfferForm({
   initialValues,
   savingMode,
   onSave,
   primaryLabel = "Utwórz ofertę",
 }: OfferFormProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [errors, setErrors] = useState<Errors>({});
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<OfferAiAnalysis | null>(
+    initialValues?.aiAnalysis ?? null,
+  );
   const saving = savingMode !== null;
+
+  function setField(name: keyof CollectedValues, value: string, onlyWhenEmpty = false) {
+    const form = formRef.current;
+    if (!form || !value) return;
+    const field = form.elements.namedItem(name);
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    if (onlyWhenEmpty && field.value.trim()) return;
+    field.value = value;
+  }
+
+  async function handleAnalyze() {
+    const form = formRef.current;
+    if (!form || analyzing || saving) return;
+    const values = collect(form);
+
+    if (values.problem.length < 30) {
+      setErrors((current) => ({
+        ...current,
+        problem: "Wklej pełniejsze zapytanie klienta — minimum 30 znaków.",
+      }));
+      form.querySelector<HTMLElement>("#problem")?.focus();
+      toast.error("AI potrzebuje pełniejszej wiadomości klienta.");
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const analysis = await analyzeClientInquiry({
+        inquiry: values.problem,
+        clientName: values.client,
+        clientEmail: values.clientEmail,
+        industry: values.industry,
+      });
+
+      setAiAnalysis(analysis);
+      setField("client", analysis.clientName, true);
+      setField("clientEmail", analysis.clientEmail, true);
+      setField("industry", analysis.industry, true);
+      setField("service", analysis.proposedSolution, true);
+      setField("scope", listToText(analysis.scopeItems), true);
+      setField("deliveryTime", analysis.suggestedDeliveryTime, true);
+      setErrors((current) => ({ ...current, problem: "" }));
+      toast.success("AI przeanalizowało zapytanie i uzupełniło puste pola.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nie udało się uruchomić analizy AI.");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   async function process(form: HTMLFormElement, status: OfferSaveStatus) {
     const values = collect(form);
@@ -130,6 +338,12 @@ export function OfferForm({
       return;
     }
 
+    if (status === "ready" && aiAnalysis?.clarifyingQuestions.length) {
+      toast.warning(
+        `Oferta zawiera ${aiAnalysis.clarifyingQuestions.length} pytań do doprecyzowania. Sprawdź je przed wysłaniem klientowi.`,
+      );
+    }
+
     await onSave(
       {
         client: values.client,
@@ -142,6 +356,7 @@ export function OfferForm({
         deliveryTime: values.deliveryTime,
         notes: values.notes,
         tone: initialValues?.tone ?? "partner",
+        aiAnalysis,
       },
       status,
     );
@@ -159,15 +374,16 @@ export function OfferForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
+    <form ref={formRef} onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
       <div className="rounded-xl border border-primary/20 bg-accent/55 p-4 sm:flex sm:items-start sm:gap-4">
         <span className="mb-3 grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground sm:mb-0">
           <Sparkles className="size-4" aria-hidden="true" />
         </span>
         <div>
-          <p className="font-medium">Zacznij od wiadomości klienta</p>
+          <p className="font-medium">Wklej wiadomość klienta i uruchom analizę AI</p>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Wklej pełne zapytanie, nawet gdy nie znasz jeszcze ceny i zakresu. Taki wpis możesz zapisać jako szkic i dokończyć później.
+            AI przygotuje podsumowanie, cel, rozwiązanie, zakres, rezultaty, wyłączenia, pytania,
+            sugerowany termin i treść oferty. Nie ustala ceny i nie zapisuje niczego bez Twojej decyzji.
           </p>
         </div>
       </div>
@@ -180,7 +396,7 @@ export function OfferForm({
           <div>
             <h2 className="text-lg font-semibold">Zapytanie klienta</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Dane potrzebne do rozpoznania klienta i zrozumienia jego sytuacji.
+              Zachowaj oryginalną wiadomość. AI utworzy osobne, edytowalne podsumowanie.
             </p>
           </div>
         </div>
@@ -213,7 +429,7 @@ export function OfferForm({
           <FieldWrap
             id="industry"
             label="Branża — opcjonalnie"
-            hint="Przyda się później do dopasowania treści przez AI, ale nie blokuje utworzenia oferty."
+            hint="AI spróbuje ją wykryć z wiadomości, ale możesz podać ją ręcznie."
           >
             <Input
               id="industry"
@@ -228,14 +444,15 @@ export function OfferForm({
         <div className="mt-5">
           <FieldWrap
             id="problem"
-            label="Treść zapytania lub potrzeba klienta *"
-            hint="Najlepiej wklej oryginalną wiadomość klienta. Nie skracaj jej na siłę — szczegóły będą później przydatne do analizy AI."
+            label="Oryginalna wiadomość lub opis potrzeby klienta *"
+            hint="Nie usuwaj ważnych szczegółów. Maksymalnie 12 000 znaków."
             error={errors.problem}
           >
             <Textarea
               id="problem"
               name="problem"
-              rows={6}
+              rows={8}
+              maxLength={12_000}
               defaultValue={initialValues?.problem ?? ""}
               placeholder="Dzień dobry, prowadzimy piekarnię i potrzebujemy strony, przez którą klienci będą mogli składać zamówienia…"
               aria-invalid={!!errors.problem}
@@ -245,7 +462,37 @@ export function OfferForm({
             />
           </FieldWrap>
         </div>
+
+        <div className="mt-5 rounded-xl border border-border bg-secondary/35 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <p className="text-sm font-medium">Analiza zapytania przez AI</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Istniejące ręcznie wpisane pola nie zostaną nadpisane. Limit MVP: 10 analiz na godzinę.
+            </p>
+          </div>
+          <Button
+            type="button"
+            className="mt-3 w-full sm:mt-0 sm:w-auto"
+            onClick={handleAnalyze}
+            disabled={analyzing || saving}
+          >
+            {analyzing ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Sparkles className="size-4" aria-hidden="true" />
+            )}
+            {analyzing ? "Analizowanie…" : aiAnalysis ? "Analizuj ponownie" : "Analizuj przez AI"}
+          </Button>
+        </div>
       </section>
+
+      {aiAnalysis && (
+        <AiAnalysisEditor
+          analysis={aiAnalysis}
+          onChange={setAiAnalysis}
+          onRemove={() => setAiAnalysis(null)}
+        />
+      )}
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-soft sm:p-6">
         <div className="flex items-start gap-3">
@@ -255,7 +502,7 @@ export function OfferForm({
           <div>
             <h2 className="text-lg font-semibold">Rozwiązanie i zakres</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Zdefiniuj rezultat, który sprzedajesz — nie tylko listę czynności.
+              AI uzupełnia puste pola, ale zakres musi zostać zweryfikowany przez wykonawcę.
             </p>
           </div>
         </div>
@@ -263,8 +510,8 @@ export function OfferForm({
         <div className="mt-6 space-y-5">
           <FieldWrap
             id="service"
-            label="Nazwa usługi lub projektu"
-            hint="Wymagana dopiero dla gotowej oferty. Nazwij efekt, np. „Strona sprzedażowa z rezerwacją online”."
+            label="Proponowane rozwiązanie / nazwa projektu"
+            hint="Nazwij efekt, np. „Strona sprzedażowa z rezerwacją online”."
             error={errors.service}
           >
             <Input
@@ -281,16 +528,16 @@ export function OfferForm({
 
           <FieldWrap
             id="scope"
-            label="Zakres i rezultaty"
-            hint="Wypisz każdy element w osobnej linii. Podgląd oferty zamieni je w czytelną listę."
+            label="Zakres prac"
+            hint="Każdy element wpisz w osobnej linii."
             error={errors.scope}
           >
             <Textarea
               id="scope"
               name="scope"
-              rows={7}
+              rows={8}
               defaultValue={initialValues?.scope ?? ""}
-              placeholder={"Projekt graficzny strony\nWdrożenie 6 podstron\nFormularz zamówień\nKonfiguracja analityki\n30 dni wsparcia po wdrożeniu"}
+              placeholder={"Projekt struktury strony\nProjekt interfejsu\nWdrożenie podstron\nFormularz zamówień\nKonfiguracja analityki"}
               aria-invalid={!!errors.scope}
               aria-describedby={
                 ["scope-hint", errors.scope ? "scope-error" : ""].filter(Boolean).join(" ")
@@ -308,7 +555,7 @@ export function OfferForm({
           <div>
             <h2 className="text-lg font-semibold">Wycena i warunki</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ustal cenę, termin oraz zasady, które ograniczą nieporozumienia podczas realizacji.
+              Cena pozostaje całkowicie pod Twoją kontrolą. AI proponuje wyłącznie orientacyjny termin.
             </p>
           </div>
         </div>
@@ -318,7 +565,7 @@ export function OfferForm({
             <FieldWrap
               id="price"
               label="Cena całkowita (PLN)"
-              hint="Na tym etapie wpisz ustaloną kwotę. Rozbicie na pozycje dodamy w kalkulatorze wyceny."
+              hint="AI celowo nie uzupełnia ceny."
               error={errors.price}
             >
               <Input
@@ -340,14 +587,14 @@ export function OfferForm({
             <FieldWrap
               id="deliveryTime"
               label="Termin realizacji"
-              hint="Np. „6 tygodni od dostarczenia materiałów i wpłaty zaliczki”."
+              hint="Traktuj sugestię AI jako punkt startowy, nie zobowiązanie."
               error={errors.deliveryTime}
             >
               <Input
                 id="deliveryTime"
                 name="deliveryTime"
                 defaultValue={initialValues?.deliveryTime ?? ""}
-                placeholder="6 tygodni od akceptacji"
+                placeholder="4–6 tygodni od akceptacji zakresu"
                 aria-invalid={!!errors.deliveryTime}
                 aria-describedby={
                   ["deliveryTime-hint", errors.deliveryTime ? "deliveryTime-error" : ""]
@@ -361,14 +608,14 @@ export function OfferForm({
           <FieldWrap
             id="notes"
             label="Warunki i dodatkowe ustalenia — opcjonalnie"
-            hint="Wpisz m.in. zaliczkę, liczbę rund poprawek, materiały po stronie klienta, zakres wsparcia oraz elementy niewchodzące w cenę."
+            hint="Wpisz zaliczkę, liczbę rund poprawek, materiały po stronie klienta i zasady wsparcia."
           >
             <Textarea
               id="notes"
               name="notes"
               rows={6}
               defaultValue={initialValues?.notes ?? ""}
-              placeholder={"50% zaliczki przed rozpoczęciem prac.\nCena obejmuje 2 rundy poprawek.\nKlient dostarcza teksty i zdjęcia.\nHosting i domena nie są wliczone w cenę."}
+              placeholder={"50% zaliczki przed rozpoczęciem prac.\nCena obejmuje 2 rundy poprawek.\nKlient dostarcza teksty i zdjęcia."}
               aria-describedby="notes-hint"
             />
           </FieldWrap>
@@ -378,14 +625,14 @@ export function OfferForm({
       <div className="sticky bottom-3 z-20 rounded-2xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex sm:items-center sm:justify-between sm:gap-4">
         <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground sm:mb-0">
           <FileText className="size-4 shrink-0" aria-hidden="true" />
-          Szkic wymaga tylko klienta i zapytania. Gotowa oferta wymaga zakresu, ceny i terminu.
+          Szkic wymaga klienta i wiadomości. Gotowa oferta wymaga zakresu, ceny i terminu.
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="outline" onClick={handleDraft} disabled={saving}>
+          <Button type="button" variant="outline" onClick={handleDraft} disabled={saving || analyzing}>
             {savingMode === "draft" && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
             {savingMode === "draft" ? "Zapisywanie…" : "Zapisz szkic"}
           </Button>
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving || analyzing}>
             {savingMode === "ready" && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
             {savingMode === "ready" ? "Zapisywanie…" : primaryLabel}
           </Button>
