@@ -1,4 +1,8 @@
 import { getSupabase } from "@/lib/supabase";
+import {
+  normalizeOfferAiAnalysis,
+  type OfferAiAnalysis,
+} from "@/lib/ai-inquiry";
 
 export type OfferStatus = "draft" | "ready" | "sent" | "accepted" | "rejected" | "archived";
 export type OfferTone = "formal" | "partner" | "sales";
@@ -17,6 +21,7 @@ export type Offer = {
   notes: string;
   tone: OfferTone | null;
   status: OfferStatus;
+  aiAnalysis: OfferAiAnalysis | null;
   createdAt: string;
   updatedAt: string;
   number: string;
@@ -33,6 +38,7 @@ export type NewOfferInput = {
   deliveryTime: string;
   notes: string;
   tone: OfferTone | null;
+  aiAnalysis: OfferAiAnalysis | null;
 };
 
 type LeadRow = {
@@ -58,6 +64,7 @@ type OfferRow = {
   additional_information: string | null;
   tone: OfferTone | null;
   status: OfferStatus;
+  ai_analysis: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -98,6 +105,7 @@ function mapOffer(row: OfferRow, lead: LeadRow): Offer {
     notes: row.additional_information ?? "",
     tone: row.tone,
     status: row.status,
+    aiAnalysis: normalizeOfferAiAnalysis(row.ai_analysis),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     number: makeOfferNumber(row.created_at, row.id),
@@ -172,6 +180,7 @@ export async function createOffer(input: NewOfferInput, status: "draft" | "ready
       additional_information: input.notes || null,
       tone: input.tone ?? "partner",
       status,
+      ai_analysis: input.aiAnalysis,
     })
     .select("*")
     .single();
@@ -217,6 +226,7 @@ export async function updateOffer(
       additional_information: input.notes || null,
       tone: input.tone ?? "partner",
       status,
+      ai_analysis: input.aiAnalysis,
     })
     .eq("id", offerId)
     .eq("user_id", user.id)

@@ -14,8 +14,10 @@ const palette = {
   muted: "#637487",
   primary: "#06b6d4",
   primaryDark: "#087f9b",
+  warning: "#9a6700",
   line: "#dce5ec",
   soft: "#f2f8fb",
+  warningSoft: "#fff8df",
   white: "#ffffff",
 };
 
@@ -123,25 +125,13 @@ function buildPdf(images: Uint8Array[]) {
   return new Blob(chunks, { type: "application/pdf" });
 }
 
-function cachedLogo(logoUrl?: string) {
-  if (!logoUrl) return null;
-  const existing = [...document.images].find(
-    (image) => image.dataset.providerLogo === "true" && image.src === logoUrl,
-  );
-  if (existing?.complete && existing.naturalWidth > 0) return existing;
-  const image = new Image();
-  image.crossOrigin = "anonymous";
-  image.src = logoUrl;
-  return image.complete && image.naturalWidth > 0 ? image : null;
-}
-
 export async function downloadOfferPdf({ offer, provider }: PdfInput) {
   if (typeof document === "undefined") throw new Error("PDF można wygenerować wyłącznie w przeglądarce.");
 
   const pages: Page[] = [];
   let page: Page;
   let y = 0;
-  const logo = cachedLogo(provider.logoUrl);
+  const ai = offer.aiAnalysis;
   const contactLines = providerContactLines(provider);
 
   function font(size: number, weight: 400 | 500 | 600 | 700 = 400) {
@@ -154,24 +144,16 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
     canvas.height = PAGE_HEIGHT;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Przeglądarka nie obsługuje generowania PDF.");
+
     context.fillStyle = palette.white;
     context.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
     context.textBaseline = "top";
     context.fillStyle = palette.primary;
     context.fillRect(0, 0, PAGE_WIDTH, 18);
 
-    let brandX = MARGIN;
-    if (logo) {
-      const box = 52;
-      const ratio = Math.min(box / logo.naturalWidth, box / logo.naturalHeight);
-      const width = logo.naturalWidth * ratio;
-      const height = logo.naturalHeight * ratio;
-      context.drawImage(logo, MARGIN, 42 + (box - height) / 2, width, height);
-      brandX += 72;
-    }
     context.font = "700 22px Arial, Helvetica, sans-serif";
     context.fillStyle = palette.ink;
-    context.fillText(provider.name, brandX, 55);
+    context.fillText(provider.name, MARGIN, 55);
     context.font = "500 17px Arial, Helvetica, sans-serif";
     context.fillStyle = palette.muted;
     context.textAlign = "right";
@@ -193,9 +175,9 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
     if (y + height > PAGE_HEIGHT - 120) createPage();
   }
 
-  function wrap(text: string, maxWidth: number) {
+  function wrap(value: string, maxWidth: number) {
     const lines: string[] = [];
-    String(text || "—")
+    String(value || "—")
       .split("\n")
       .forEach((paragraph, paragraphIndex, paragraphs) => {
         const words = paragraph.trim().split(/\s+/).filter(Boolean);
@@ -217,7 +199,14 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
 
   function text(
     value: string,
-    options: { size?: number; weight?: 400 | 500 | 600 | 700; color?: string; lineHeight?: number; x?: number; width?: number } = {},
+    options: {
+      size?: number;
+      weight?: 400 | 500 | 600 | 700;
+      color?: string;
+      lineHeight?: number;
+      x?: number;
+      width?: number;
+    } = {},
   ) {
     const size = options.size ?? 22;
     const weight = options.weight ?? 400;
@@ -234,29 +223,33 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
     });
   }
 
-  function sectionTitle(title: string) {
+  function sectionTitle(title: string, color = palette.primaryDark) {
     ensureSpace(70);
     y += 18;
     font(18, 700);
-    page.context.fillStyle = palette.primaryDark;
+    page.context.fillStyle = color;
     page.context.fillText(title.toUpperCase(), MARGIN, y);
     y += 38;
   }
 
   function paragraph(title: string, value: string) {
+    if (!value.trim()) return;
     sectionTitle(title);
-    text(value || "—", { size: 22, lineHeight: 34 });
+    text(value, { size: 22, lineHeight: 34 });
     y += 10;
   }
 
-  function bullets(title: string, items: string[], fallback: string) {
-    sectionTitle(title);
-    (items.length ? items : [fallback]).forEach((item) => {
+  function bullets(title: string, items: string[], fallback = "", warning = false) {
+    const values = items.filter(Boolean);
+    if (!values.length && !fallback) return;
+
+    sectionTitle(title, warning ? palette.warning : palette.primaryDark);
+    (values.length ? values : [fallback]).forEach((item) => {
       font(22, 400);
       const lines = wrap(item, CONTENT_WIDTH - 34);
       const height = Math.max(34, lines.length * 34) + 10;
       ensureSpace(height);
-      page.context.fillStyle = palette.primary;
+      page.context.fillStyle = warning ? palette.warning : palette.primary;
       page.context.beginPath();
       page.context.arc(MARGIN + 7, y + 13, 5, 0, Math.PI * 2);
       page.context.fill();
@@ -265,6 +258,7 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
       lines.forEach((line, index) => page.context.fillText(line, MARGIN + 34, y + index * 34));
       y += height;
     });
+    y += 4;
   }
 
   createPage();
@@ -286,6 +280,7 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
   page.context.beginPath();
   page.context.roundRect(MARGIN, y, CONTENT_WIDTH, 154, 20);
   page.context.fill();
+
   const validUntil = new Date(offer.createdAt);
   validUntil.setDate(validUntil.getDate() + 30);
   const meta = [
@@ -311,9 +306,17 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
 
   const clientDetails = [offer.client, offer.industry, offer.clientEmail].filter(Boolean).join(" · ");
   paragraph("Dane klienta", clientDetails);
-  paragraph("Sytuacja i potrzeba klienta", offer.problem);
-  paragraph("Proponowane rozwiązanie", offer.service || "Do ustalenia");
-  bullets("Zakres i rezultaty", splitItems(offer.scope), "Zakres nie został jeszcze uzupełniony.");
+  paragraph(
+    "Propozycja współpracy",
+    ai?.professionalOfferText ||
+      "Poniższa propozycja porządkuje potrzeby projektu, rekomendowane rozwiązanie, zakres odpowiedzialności, termin oraz koszt realizacji.",
+  );
+  paragraph("Cel projektu", ai?.projectGoal || "");
+  paragraph("Sytuacja i potrzeba klienta", ai?.problemSummary || offer.problem);
+  paragraph("Proponowane rozwiązanie", ai?.proposedSolution || offer.service || "Do ustalenia");
+  bullets("Zakres prac", splitItems(offer.scope), "Zakres nie został jeszcze uzupełniony.");
+  bullets("Rezultaty dla klienta", ai?.resultItems || []);
+  bullets("Elementy niewchodzące w zakres", ai?.exclusionItems || []);
 
   ensureSpace(210);
   y += 18;
@@ -332,6 +335,20 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
   page.context.fillText(formatPrice(offer.price), MARGIN + CONTENT_WIDTH / 2 + 34, y + 74);
   y += 206;
 
+  if (ai?.clarifyingQuestions.length) {
+    ensureSpace(80);
+    page.context.fillStyle = palette.warningSoft;
+    page.context.beginPath();
+    page.context.roundRect(MARGIN, y + 12, CONTENT_WIDTH, 54, 14);
+    page.context.fill();
+    y += 24;
+    font(17, 700);
+    page.context.fillStyle = palette.warning;
+    page.context.fillText("KWESTIE DO POTWIERDZENIA PRZED ROZPOCZĘCIEM", MARGIN + 22, y);
+    y += 42;
+    bullets("Do potwierdzenia", ai.clarifyingQuestions, "", true);
+  }
+
   bullets(
     "Warunki i założenia",
     splitItems(offer.notes),
@@ -340,11 +357,10 @@ export async function downloadOfferPdf({ offer, provider }: PdfInput) {
   bullets(
     "Kolejne kroki",
     [
-      "Potwierdzenie zakresu, ceny i terminu realizacji.",
-      "Akceptacja oferty oraz warunków rozpoczęcia prac.",
+      "Potwierdzenie zakresu, ceny, terminu oraz otwartych kwestii.",
+      "Akceptacja oferty i warunków rozpoczęcia prac.",
       "Przekazanie materiałów i rozpoczęcie projektu.",
     ],
-    "",
   );
 
   ensureSpace(170 + contactLines.length * 28);

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
   Download,
@@ -49,6 +50,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="text-base font-semibold text-foreground">{title}</h2>
       <div className="text-sm leading-7 text-muted-foreground">{children}</div>
     </section>
+  );
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="ml-5 list-disc space-y-1.5 marker:text-primary">
+      {items.map((item, index) => (
+        <li key={`${item}-${index}`}>{item}</li>
+      ))}
+    </ul>
   );
 }
 
@@ -187,7 +198,7 @@ function OfferDetail() {
             <p className="text-sm font-medium text-primary">Edycja {offer.number}</p>
             <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Popraw ofertę dla {offer.client}</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Zmień zapytanie, zakres, cenę, termin albo warunki. Zapisane dane zastąpią obecną wersję oferty.
+              Zmień analizę AI, zakres, cenę, termin albo warunki. Zapisane dane zastąpią obecną wersję oferty.
             </p>
           </div>
           <Button
@@ -224,6 +235,7 @@ function OfferDetail() {
     .split(/\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+  const ai = offer.aiAnalysis;
   const disabled = workingAction !== null;
   const sentOrClosed = ["sent", "accepted", "rejected"].includes(offer.status);
 
@@ -297,12 +309,20 @@ function OfferDetail() {
         </div>
       </div>
 
+      {ai?.clarifyingQuestions.length ? (
+        <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden="true" />
+          <p>
+            Ta oferta zawiera {ai.clarifyingQuestions.length} kwestii do potwierdzenia. Zweryfikuj je przed
+            oznaczeniem dokumentu jako wysłany.
+          </p>
+        </div>
+      ) : null}
+
       <article className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-card sm:p-10">
         <header className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Oferta współpracy
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Oferta współpracy</p>
             <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{offer.service || "Propozycja współpracy"}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Przygotowana przez {providerName} dla {offer.client}
@@ -334,42 +354,49 @@ function OfferDetail() {
         <Separator className="my-7" />
 
         <div className="space-y-8">
-          <Section title="Cel współpracy">
-            <p>
-              Dziękuję za przekazanie informacji dotyczących projektu. Poniższa propozycja porządkuje potrzeby,
-              rekomendowane rozwiązanie, zakres odpowiedzialności, termin oraz koszt realizacji.
+          <Section title="Propozycja współpracy">
+            <p className="whitespace-pre-line">
+              {ai?.professionalOfferText ||
+                "Poniższa propozycja porządkuje potrzeby projektu, rekomendowane rozwiązanie, zakres odpowiedzialności, termin oraz koszt realizacji."}
             </p>
           </Section>
 
+          {ai?.projectGoal ? (
+            <Section title="Cel projektu">
+              <p className="whitespace-pre-line">{ai.projectGoal}</p>
+            </Section>
+          ) : null}
+
           <Section title="Sytuacja i potrzeba klienta">
-            <p className="whitespace-pre-line">{offer.problem}</p>
+            <p className="whitespace-pre-line">{ai?.problemSummary || offer.problem}</p>
           </Section>
 
           <Section title="Proponowane rozwiązanie">
-            <p>
-              Rekomendowany projekt: <strong className="text-foreground">{offer.service}</strong>. Celem jest
-              dostarczenie uzgodnionego rezultatu w ramach zakresu opisanego poniżej.
+            <p className="whitespace-pre-line">
+              {ai?.proposedSolution || offer.service || "Rozwiązanie zostanie doprecyzowane po potwierdzeniu wymagań."}
             </p>
           </Section>
 
-          <Section title="Zakres i rezultaty">
-            {scopeItems.length ? (
-              <ul className="ml-5 list-disc space-y-1.5 marker:text-primary">
-                {scopeItems.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>Zakres nie został jeszcze uzupełniony.</p>
-            )}
+          <Section title="Zakres prac">
+            {scopeItems.length ? <BulletList items={scopeItems} /> : <p>Zakres nie został jeszcze uzupełniony.</p>}
           </Section>
+
+          {ai?.resultItems.length ? (
+            <Section title="Rezultaty dla klienta">
+              <BulletList items={ai.resultItems} />
+            </Section>
+          ) : null}
+
+          {ai?.exclusionItems.length ? (
+            <Section title="Elementy niewchodzące w zakres">
+              <BulletList items={ai.exclusionItems} />
+            </Section>
+          ) : null}
 
           <div className="grid gap-6 rounded-xl border border-border bg-secondary/40 p-5 sm:grid-cols-2">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Termin realizacji</p>
-              <p className="mt-2 font-semibold text-foreground">
-                {offer.deliveryTime || "Do ustalenia"}
-              </p>
+              <p className="mt-2 font-semibold text-foreground">{offer.deliveryTime || "Do ustalenia"}</p>
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cena całkowita</p>
@@ -377,13 +404,15 @@ function OfferDetail() {
             </div>
           </div>
 
+          {ai?.clarifyingQuestions.length ? (
+            <Section title="Do potwierdzenia">
+              <BulletList items={ai.clarifyingQuestions} />
+            </Section>
+          ) : null}
+
           <Section title="Warunki i założenia">
             {termsItems.length ? (
-              <ul className="ml-5 list-disc space-y-1.5 marker:text-primary">
-                {termsItems.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
+              <BulletList items={termsItems} />
             ) : (
               <p>
                 Szczegółowe warunki płatności, materiały po stronie klienta, liczba rund poprawek oraz elementy
@@ -394,7 +423,7 @@ function OfferDetail() {
 
           <Section title="Kolejne kroki">
             <ol className="ml-5 list-decimal space-y-1.5 marker:font-semibold marker:text-primary">
-              <li>Potwierdzenie zakresu, ceny i terminu realizacji.</li>
+              <li>Potwierdzenie zakresu, ceny, terminu i otwartych kwestii.</li>
               <li>Akceptacja oferty oraz warunków rozpoczęcia prac.</li>
               <li>Przekazanie materiałów i rozpoczęcie projektu zgodnie z ustalonym harmonogramem.</li>
             </ol>
@@ -408,6 +437,11 @@ function OfferDetail() {
           {user?.email && <p className="mt-1">{user.email}</p>}
         </footer>
       </article>
+
+      <details className="mt-6 rounded-xl border border-border bg-card p-5">
+        <summary className="cursor-pointer text-sm font-medium">Materiał roboczy: oryginalne zapytanie klienta</summary>
+        <p className="mt-4 whitespace-pre-line text-sm leading-7 text-muted-foreground">{offer.problem}</p>
+      </details>
     </AppLayout>
   );
 }
