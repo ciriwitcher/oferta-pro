@@ -39,9 +39,11 @@ function LoginPage() {
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
     const next: Record<string, string> = {};
+
     if (!email) next.email = "Podaj adres e-mail.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Podaj poprawny adres e-mail.";
     if (!password) next.password = "Podaj hasło.";
+
     setErrors(next);
     if (Object.keys(next).length || supabaseConfigError) return;
 
@@ -55,7 +57,7 @@ function LoginPage() {
       setFormError(
         message.includes("invalid login credentials") || message.includes("email not confirmed")
           ? message.includes("email not confirmed")
-            ? "Najpierw potwierdź adres e-mail, korzystając z wiadomości od Supabase."
+            ? "Adres e-mail nie został jeszcze potwierdzony. Otwórz link aktywacyjny wysłany po rejestracji."
             : "Nieprawidłowy e-mail lub hasło."
           : error instanceof Error
             ? error.message
@@ -82,13 +84,19 @@ function LoginPage() {
           </p>
 
           {supabaseConfigError && (
-            <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <p
+              role="alert"
+              className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
               {supabaseConfigError}
             </p>
           )}
 
           {formError && (
-            <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <p
+              role="alert"
+              className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
               {formError}
             </p>
           )}
@@ -112,7 +120,15 @@ function LoginPage() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Hasło</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="password">Hasło</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Nie pamiętasz hasła?
+                </Link>
+              </div>
               <Input
                 id="password"
                 name="password"

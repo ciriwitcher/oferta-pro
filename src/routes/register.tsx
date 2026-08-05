@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/app-layout";
-import { useAuth } from "@/lib/auth-context";
+import { AuthFlowError, useAuth } from "@/lib/auth-context";
 import { supabaseConfigError } from "@/lib/supabase";
 
 export const Route = createFileRoute("/register")({
@@ -33,6 +34,7 @@ function Field({
   const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null]
     .filter(Boolean)
     .join(" ");
+
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
@@ -53,30 +55,40 @@ function Field({
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const { signUp, user, loading } = useAuth();
+  const { signUp, resendSignupConfirmation, user, loading } = useAuth();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/dashboard", replace: true });
   }, [loading, navigate, user]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError("");
     const data = new FormData(e.currentTarget);
     const name = String(data.get("name") ?? "").trim();
-    const email = String(data.get("email") ?? "").trim();
+    const email = String(data.get("email") ?? "").trim().toLowerCase();
     const password = String(data.get("password") ?? "");
     const confirm = String(data.get("confirm") ?? "");
     const next: Record<string, string> = {};
+
     if (!name) next.name = "Podaj imię, nazwę lub nazwę firmy.";
     if (!email) next.email = "Podaj adres e-mail.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Podaj poprawny adres e-mail.";
     if (password.length < 8) next.password = "Hasło musi mieć co najmniej 8 znaków.";
     if (confirm !== password) next.confirm = "Hasła muszą być takie same.";
+
     setErrors(next);
     if (Object.keys(next).length || supabaseConfigError) return;
 
@@ -85,20 +97,43 @@ function RegisterPage() {
       const result = await signUp(name, email, password);
       if (result.requiresEmailConfirmation) {
         setConfirmationEmail(email);
+        setResendCooldown(60);
       } else {
         navigate({ to: "/dashboard", replace: true });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : "";
-      setFormError(
-        message.includes("already registered") || message.includes("user already registered")
-          ? "Konto z tym adresem e-mail już istnieje. Przejdź do logowania."
-          : error instanceof Error
-            ? error.message
-            : "Nie udało się utworzyć konta.",
-      );
+      if (error instanceof AuthFlowError && error.code === "EMAIL_ALREADY_REGISTERED") {
+        setFormError(
+          "Konto z tym adresem e-mail już istnieje. Zaloguj się albo użyj opcji „Nie pamiętasz hasła?”.",
+        );
+      } else {
+        const message = error instanceof Error ? error.message.toLowerCase() : "";
+        setFormError(
+          message.includes("already registered") || message.includes("user already registered")
+            ? "Konto z tym adresem e-mail już istnieje. Zaloguj się albo zresetuj hasło."
+            : error instanceof Error
+              ? error.message
+              : "Nie udało się utworzyć konta.",
+        );
+      }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    if (!confirmationEmail || resending || resendCooldown > 0) return;
+    setResending(true);
+    try {
+      await resendSignupConfirmation(confirmationEmail);
+      setResendCooldown(60);
+      toast.success("Nowy link aktywacyjny został wysłany.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Nie udało się ponownie wysłać linku aktywacyjnego.",
+      );
+    } finally {
+      setResending(false);
     }
   }
 
@@ -107,14 +142,38 @@ function RegisterPage() {
       <div className="grid min-h-dvh place-items-center bg-background px-4 py-12">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-card">
           <CheckCircle2 className="mx-auto size-12 text-primary" aria-hidden="true" />
-          <h1 className="mt-5 text-2xl font-bold">Sprawdź skrzynkę e-mail</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
+          <h1 className="mt-5 text-2xl font-bold">Potwierdź adres e-mail</h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Wysłaliśmy link aktywacyjny na <strong className="text-foreground">{confirmationEmail}</strong>.
-            Po potwierdzeniu adresu wróć do logowania.
+            Sprawdź również folder Spam i Oferty. Link przekieruje Cię z powrotem do aplikacji.
           </p>
-          <Button asChild className="mt-6 w-full">
-            <Link to="/login">Przejdź do logowania</Link>
-          </Button>
+
+          <div className="mt-6 space-y-3">
+            <Button asChild className="w-full">
+              <Link to="/login">
+                <Mail className="size-4" aria-hidden="true" />
+                Przejdź do logowania
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={resending || resendCooldown > 0}
+              onClick={resendConfirmation}
+            >
+              {resending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <RefreshCw className="size-4" aria-hidden="true" />
+              )}
+              {resending
+                ? "Wysyłanie…"
+                : resendCooldown > 0
+                  ? `Wyślij ponownie za ${resendCooldown} s`
+                  : "Wyślij link ponownie"}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -136,15 +195,29 @@ function RegisterPage() {
           </p>
 
           {supabaseConfigError && (
-            <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <p
+              role="alert"
+              className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
               {supabaseConfigError}
             </p>
           )}
 
           {formError && (
-            <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              {formError}
-            </p>
+            <div
+              role="alert"
+              className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              <p>{formError}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                <Link to="/login" className="font-medium underline underline-offset-4">
+                  Zaloguj się
+                </Link>
+                <Link to="/forgot-password" className="font-medium underline underline-offset-4">
+                  Zresetuj hasło
+                </Link>
+              </div>
+            </div>
           )}
 
           <form onSubmit={onSubmit} noValidate className="mt-6 space-y-5">
